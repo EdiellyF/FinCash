@@ -1,0 +1,49 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: fincash_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fincash
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123mudar
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_fincash:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fincash_backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      PORT: 5000
+      DATABASE_URL: "postgresql://postgres:123mudar@postgres:5432/fincash?schema=public"
+      JWT_SECRET: "change_this_secret"
+      FRONTEND_URL: "http://localhost:5173"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: fincash_frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_fincash:
