@@ -9,4 +9,4 @@ COPY . .
 
 EXPOSE 5173
 
-CMD sh -c "node node_modules/vite/bin/vite.js"
+CMD ["npm", "run", "dev"]

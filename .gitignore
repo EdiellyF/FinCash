@@ -7,15 +7,13 @@ package-lock.json
 .env.local
 .env.*.local
 
-# Prisma
-prisma/migrations/
-
 # Logs
 logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
 
 # OS
 .DS_Store
@@ -27,7 +25,15 @@ Thumbs.db
 *.swp
 *.swo
 *~
+.history/
 
 # Build
 dist/
 build/
+.cache/
+
+# Vite
+.vite/
+
+# Prisma (MANTER MIGRATIONS - apenas ignorar client gerado)
+node_modules/.prisma/

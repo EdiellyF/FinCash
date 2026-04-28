@@ -15,7 +15,7 @@ import { errorMiddleware } from './middlewares/errorMiddleware.js';
 
 const app = express();
 
-app.use(cors({ origin: env.frontendUrl, credentials: true }));
+app.use(cors({ origin: '*', credentials: true }));
 app.use(express.json());
 
 app.get('/api/health', (req, res) => res.json({ message: 'API online' }));

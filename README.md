@@ -1,15 +1,6 @@
-# 💰 FinCash - Gestão Financeira Pessoal
+# FinCash - Gestão Financeira Pessoal
 
-<div align="center">
-
-![FinCash](https://img.shields.io/badge/FinCash-Financeiro-green?style=for-the-badge)
-
-![Node](https://img.shields.io/badge/Node.js-20+-339933?style=for-the-badge&logo=node.js&logoColor=white)
-![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?style=for-the-badge&logo=postgresql&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
-
-</div>
+**Trabalho de Extensão 1 - IFTO**
 
 ---
 
@@ -44,7 +35,7 @@ docker compose up --build
 ```
 
 ✨ Isso irá:
-- Criar e iniciar o banco PostgreSQL (porta 5433)
+- Criar e iniciar o banco PostgreSQL
 - Executar migrations e seeds do Prisma
 - Iniciar o backend na porta 5000
 - Iniciar o frontend na porta 5173
@@ -76,10 +67,10 @@ cd backend
 cp .env.example .env
 # Edite .env com suas credenciais do PostgreSQL
 npm install
-npm run prisma:generate
-npm run prisma:migrate
-npm run prisma:seed
-npm run dev
+node node_modules/prisma/build/index.js generate
+node node_modules/prisma/build/index.js migrate deploy
+node prisma/seed.js
+npm start
 ```
 
 **🔗 Backend:** http://localhost:5000
@@ -90,7 +81,7 @@ Em outro terminal:
 ```bash
 cd frontend
 npm install
-npm run dev
+node node_modules/vite/bin/vite.js
 ```
 
 **🔗 Frontend:** http://localhost:5173
@@ -107,7 +98,8 @@ fincash/
 │   ├── 📂 src/           # Código fonte
 │   └── 🐳 Dockerfile
 ├── 🐳 docker-compose.yml # Orquestração Docker
-└── 📖 README.md
+├── 📖 README.md
+└── 🚫 .gitignore
 ```
 
 ## 🛠️ Tecnologias
@@ -129,7 +121,7 @@ fincash/
 
 ## 📝 Observações
 
-- Por padrão, o Docker Compose usa a porta 5433 para PostgreSQL para evitar conflitos com instalações locais.
+- O fluxo de recuperação de senha está funcional em nível local, porém simplificado. Para produção, o ideal é adicionar envio de e-mail com token temporário.
 - O projeto foi estruturado para evolução fácil com testes, Docker, refresh token e deploy.
 
 ---
