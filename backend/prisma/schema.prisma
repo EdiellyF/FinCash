@@ -26,6 +26,7 @@ model User {
   transactions Transaction[]
   goals        Goal[]
   budgets      Budget[]
+  chatMessages ChatMessage[]
 
   @@map("users")
 }
@@ -95,4 +96,27 @@ model Budget {
 
   @@unique([userId, categoryId, month, year])
   @@map("budgets")
+}
+
+model ChatMessage {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  role      String   // "user" ou "assistant"
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("chat_messages")
+}
+
+model RequestLog {
+  id        String   @id @default(uuid())
+  date      DateTime @default(now()) @db.Date
+  count     Int      @default(0)
+  provider  String   // "openai" ou "ollama"
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([date, provider])
+  @@map("request_logs")
 }

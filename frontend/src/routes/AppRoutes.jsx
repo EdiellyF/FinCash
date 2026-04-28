@@ -12,6 +12,7 @@ import Budgets from '../pages/Budgets';
 import Reports from '../pages/Reports';
 import Profile from '../pages/Profile';
 import Education from '../pages/Education';
+import Chat from '../pages/Chat';
 
 export default function AppRoutes() {
   return (
@@ -29,6 +30,7 @@ export default function AppRoutes() {
         <Route path="/budgets" element={<PrivateRoute><Budgets /></PrivateRoute>} />
         <Route path="/reports" element={<PrivateRoute><Reports /></PrivateRoute>} />
         <Route path="/education" element={<PrivateRoute><Education /></PrivateRoute>} />
+        <Route path="/chat" element={<PrivateRoute><Chat /></PrivateRoute>} />
         <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
       </Routes>
     </BrowserRouter>

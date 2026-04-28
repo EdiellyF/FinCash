@@ -3,7 +3,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../hooks/useTheme';
 import {
   Moon, Sun, LayoutDashboard, ArrowLeftRight, Tag, Target, Wallet,
-  BarChart2, User, GraduationCap, TrendingUp, LogOut, Menu
+  BarChart2, User, GraduationCap, TrendingUp, LogOut, Menu, MessageSquare
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -15,6 +15,7 @@ const links = [
   { to: '/budgets', label: 'Orçamentos', icon: Wallet },
   { to: '/reports', label: 'Relatórios', icon: BarChart2 },
   { to: '/education', label: 'Educação Financeira', icon: GraduationCap },
+  { to: '/chat', label: 'Assistente IA', icon: MessageSquare },
   { to: '/profile', label: 'Perfil', icon: User },
 ];
 
