@@ -112,11 +112,12 @@ model ChatMessage {
 
 model RequestLog {
   id        String   @id @default(uuid())
+  userId    String   @map("user_id")
   date      DateTime @default(now()) @db.Date
   count     Int      @default(0)
-  provider  String   // "openai" ou "ollama"
+  provider  String   // "gemini" ou "ollama"
   createdAt DateTime @default(now()) @map("created_at")
 
-  @@unique([date, provider])
+  @@unique([userId, date, provider])
   @@map("request_logs")
 }
