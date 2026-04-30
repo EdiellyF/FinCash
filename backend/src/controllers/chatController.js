@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { generateFinancialAdvice } from '../services/aiService.js';
+import { generateFinancialAdvice, getUserLimits } from '../services/aiService.js';
 
 const prisma = new PrismaClient();
 
@@ -73,5 +73,16 @@ export async function getHistory(req, res) {
   } catch (error) {
     console.error('Erro ao buscar histórico:', error);
     res.status(500).json({ message: 'Erro ao buscar histórico.' });
+  }
+}
+
+export async function getLimits(req, res) {
+  try {
+    const userId = req.user.id;
+    const limits = await getUserLimits(userId);
+    res.json(limits);
+  } catch (error) {
+    console.error('Erro ao buscar limites:', error);
+    res.status(500).json({ message: 'Erro ao buscar limites.' });
   }
 }
