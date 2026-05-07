@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import Groq from 'groq-sdk';
 import { env } from '../config/env.js';
 
 const prisma = new PrismaClient();
@@ -7,13 +8,29 @@ const prisma = new PrismaClient();
 // Configuração Gemini
 const genAI = env.geminiApiKey ? new GoogleGenerativeAI(env.geminiApiKey) : null;
 
+// Configuração GROQ
+const groqClient = env.groqApiKey ? new Groq({ apiKey: env.groqApiKey }) : null;
+
 // Configuração Ollama (local)
 const OLLAMA_API_URL = env.ollamaApiUrl || 'http://localhost:11434';
 const OLLAMA_MODEL = env.ollamaModel || 'llama3.2';
-const GEMINI_DAILY_LIMIT_GLOBAL = 20; // 20 requisições por dia no total (global)
-const GEMINI_DAILY_LIMIT_PER_USER = 2; // 2 requisições por dia por usuário
 
+// Limites de requisições
+const GEMINI_DAILY_LIMIT_GLOBAL = 20;
+const GEMINI_DAILY_LIMIT_PER_USER = 2;
+const GROQ_DAILY_LIMIT_GLOBAL = 100;
+const GROQ_DAILY_LIMIT_PER_USER = 20;
 
+// Modelos disponíveis
+const MODELS = {
+  gemini: 'gemini-flash-latest',
+  groq: 'llama-3.3-70b-versatile',
+  ollama: env.ollamaModel || 'llama3.2',
+};
+
+/**
+ * Obter contexto financeiro do usuário
+ */
 async function getFinancialContext(userId) {
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -36,12 +53,10 @@ async function getFinancialContext(userId) {
     take: 20,
   });
 
-
   const goals = await prisma.goal.findMany({
     where: { userId },
     orderBy: { deadline: 'asc' },
   });
-
 
   const budgets = await prisma.budget.findMany({
     where: {
@@ -53,7 +68,6 @@ async function getFinancialContext(userId) {
       category: true,
     },
   });
-
 
   const totalIncome = recentTransactions
     .filter(t => t.type === 'income')
@@ -76,7 +90,6 @@ async function getFinancialContext(userId) {
     currentYear,
   };
 }
-
 
 /**
  * Verifica e incrementa contador de requisições diárias por usuário
@@ -116,9 +129,9 @@ async function checkAndIncrementRequestCount(userId, provider) {
 }
 
 /**
- * Verifica limite global do Gemini (20 por dia)
+ * Verifica limite global de um provedor
  */
-async function checkGlobalGeminiLimit() {
+async function checkGlobalLimit(provider) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -127,7 +140,7 @@ async function checkGlobalGeminiLimit() {
       userId_date_provider: {
         userId: 'global',
         date: today,
-        provider: 'gemini',
+        provider,
       },
     },
   });
@@ -136,9 +149,9 @@ async function checkGlobalGeminiLimit() {
 }
 
 /**
- * Verifica limite por usuário do Gemini (2 por dia)
+ * Verifica limite por usuário de um provedor
  */
-async function checkUserGeminiLimit(userId) {
+async function checkUserLimit(userId, provider) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -147,7 +160,7 @@ async function checkUserGeminiLimit(userId) {
       userId_date_provider: {
         userId,
         date: today,
-        provider: 'gemini',
+        provider,
       },
     },
   });
@@ -156,50 +169,64 @@ async function checkUserGeminiLimit(userId) {
 }
 
 /**
- * Decide qual provedor usar baseado nos limites
+ * Obtém os limites configurados para cada provedor
  */
-async function getProvider(userId) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  // Verificar limite global do Gemini (20/dia)
-  const globalCount = await checkGlobalGeminiLimit();
-  
-  // Verificar limite por usuário do Gemini (2/dia)
-  const userCount = await checkUserGeminiLimit(userId);
-
-  // Se Gemini não configurado, limite global atingido OU limite por usuário atingido, usa Ollama
-  if (!genAI || globalCount >= GEMINI_DAILY_LIMIT_GLOBAL || userCount >= GEMINI_DAILY_LIMIT_PER_USER) {
-    return 'ollama';
-  }
-
-  return 'gemini';
+function getProviderLimits(provider) {
+  const limits = {
+    gemini: {
+      global: GEMINI_DAILY_LIMIT_GLOBAL,
+      perUser: GEMINI_DAILY_LIMIT_PER_USER,
+    },
+    groq: {
+      global: GROQ_DAILY_LIMIT_GLOBAL,
+      perUser: GROQ_DAILY_LIMIT_PER_USER,
+    },
+  };
+  return limits[provider] || { global: Infinity, perUser: Infinity };
 }
 
 /**
- * Retorna os limites atuais do usuário
+ * Verifica se um provedor está disponível e dentro dos limites
  */
-export async function getUserLimits(userId) {
-  const globalCount = await checkGlobalGeminiLimit();
-  const userCount = await checkUserGeminiLimit(userId);
-  
-  return {
-    globalLimit: GEMINI_DAILY_LIMIT_GLOBAL,
-    globalUsed: globalCount,
-    globalRemaining: Math.max(0, GEMINI_DAILY_LIMIT_GLOBAL - globalCount),
-    userLimit: GEMINI_DAILY_LIMIT_PER_USER,
-    userUsed: userCount,
-    userRemaining: Math.max(0, GEMINI_DAILY_LIMIT_PER_USER - userCount),
-    canUseGemini: genAI && globalCount < GEMINI_DAILY_LIMIT_GLOBAL && userCount < GEMINI_DAILY_LIMIT_PER_USER
-  };
+async function isProviderAvailable(provider, userId) {
+  // Verificar se o cliente está configurado
+  if (provider === 'gemini' && !genAI) return false;
+  if (provider === 'groq' && !groqClient) return false;
+
+  const limits = getProviderLimits(provider);
+  const globalCount = await checkGlobalLimit(provider);
+  const userCount = await checkUserLimit(userId, provider);
+
+  return (
+    globalCount < limits.global &&
+    userCount < limits.perUser
+  );
 }
 
+/**
+ * Seleciona o melhor provedor disponível
+ * Prioridade: GROQ > Gemini > Ollama
+ */
+async function selectBestProvider(userId) {
+  // Tentar GROQ primeiro (mais rápido e com mais limites)
+  if (await isProviderAvailable('groq', userId)) {
+    return 'groq';
+  }
+
+  // Tentar Gemini
+  if (await isProviderAvailable('gemini', userId)) {
+    return 'gemini';
+  }
+
+  // Fallback para Ollama (sempre disponível)
+  return 'ollama';
+}
 
 /**
  * Gera dica financeira usando Gemini
  */
 async function generateWithGemini(contextText, historyText, userMessage) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
+  const model = genAI.getGenerativeModel({ model: MODELS.gemini });
 
   const systemPrompt = `Você é um CONSULTOR FINANCEIRO ESPECIALIZADO com mais de 20 anos de experiência em finanças pessoais e investimentos.
 
@@ -281,7 +308,7 @@ ESTILO DE COMUNICAÇÃO:
 - Seja DIRETO e OBJETIVO
 - Use LINGUAGEM SIMPLES mas profissional
 - Use EMOJIS para destacar pontos importantes
-- Seja EMPÁTICO mas FIRMENas recomendações
+- Seja EMPÁTICO mas FIRME nas recomendações
 - Use NUMEROS E PORCENTAGENS sempre que possível
 
 Exemplo de formato:
@@ -297,6 +324,117 @@ Responda em PORTUGUÊS BRASILEIRO.`;
 
   const result = await model.generateContent(fullPrompt);
   return result.response.text();
+}
+
+/**
+ * Gera dica financeira usando GROQ
+ */
+async function generateWithGroq(contextText, historyText, userMessage) {
+  const systemPrompt = `Você é um CONSULTOR FINANCEIRO ESPECIALIZADO com mais de 20 anos de experiência em finanças pessoais e investimentos.
+
+Sua MISSÃO é fornecer uma análise financeira EXTREMAMENTE DETALHADA, PROFUNDAMENTE PERSONALIZADA e PRATICAMENTE APLICÁVEL.
+
+IMPORTANTE - SUA RESPOSTA DEVE SER:
+- MUITO LONGA (mínimo 1000 palavras, idealmente 1500-2000)
+- ALTAMENTE ESTRUTURADA em seções claras
+- RICA EM DADOS NÚMERICOS E PORCENTAGENS
+- COM EXEMPLOS PRÁTICOS E CENÁRIOS REAIS
+- COM AÇÕES ESPECÍFICAS E IMEDIATAS
+
+ESTRUTURA OBRIGATÓRIA DA RESPOSTA:
+
+1. 🔍 RESUMO EXECUTIVO (100-150 palavras)
+   - Situação financeira atual em 3 frases
+   - Principal problema identificado
+   - Principal oportunidade
+
+2. 📊 ANÁLISE DE RECEITAS (150-200 palavras)
+   - Total de receitas e comparação com média brasileira
+   - Fontes de renda e diversificação
+   - Tendência de receitas nos últimos 30 dias
+   - Recomendações para aumentar receitas
+
+3. 💸 ANÁLISE DE DESPESAS (200-250 palavras)
+   - Total de despesas e percentual por categoria
+   - Top 3 categorias de gastos com valores absolutos e relativos
+   - Identificação de gastos desnecessários ou excessivos
+   - Comparação mês atual vs mês anterior
+   - Onde é possível economizar imediatamente
+
+4. 🎯 ORÇAMENTO (150-200 palavras)
+   - Status de cada orçamento definido
+   - Categorias estouradas com valores excedentes
+   - Categorias dentro do limite com margem
+   - Ajustes necessários no orçamento
+
+5. 🏆 METAS FINANCEIRAS (200-250 palavras)
+   - Progresso de cada meta em % e valor
+   - Tempo restante para cada meta
+   - Se está no caminho certo (sim/não e por quê)
+   - Ajustes necessários para atingir metas no prazo
+   - Sugestão de reorganização de prioridades
+
+6. 📈 DADOS NÚMERICOS ESSENCIAIS (150-200 palavras)
+   - Saldo atual e sua evolução
+   - Margem de poupança atual (%)
+   - Índice de endividamento (se aplicável)
+   - Taxa de poupança mensal
+   - Score financeiro (0-100) com justificativa
+
+7. 💡 15 RECOMENDAÇÕES PRÁTICAS (cada uma com 2-3 frases)
+   - 5 ações para IMEDIATO (hoje/esta semana)
+   - 5 ações para CURTO PRAZO (este mês)
+   - 5 ações para MÉDIO PRAZO (próximos 3 meses)
+   - Cada recomendação deve ter valor estimado de economia
+
+8. 📅 PLANO DE AÇÃO DETALHADO (200-250 palavras)
+   - Semana 1: 3 tarefas específicas
+   - Semana 2: 3 tarefas específicas
+   - Semana 3: 3 tarefas específicas
+   - Semana 4: 3 tarefas específicas
+   - Cada tarefa com responsável e prazo
+
+9. ⚠️ RISCOS E ALERTAS (150-200 palavras)
+   - 5 riscos financeiros atuais
+   - 5 sinais de alerta a monitorar
+   - 5 armadilhas comuns a evitar
+   - Plano de contingência
+
+10. 🔮 PROJEÇÕES E CENÁRIOS (200-250 palavras)
+    - Cenário otimista (se continuar assim)
+    - Cenário realista (com ajustes sugeridos)
+    - Cenário pessimista (se nada mudar)
+    - Projeção de saldo em 6 meses e 1 ano
+
+ESTILO DE COMUNICAÇÃO:
+- Seja DIRETO e OBJETIVO
+- Use LINGUAGEM SIMPLES mas profissional
+- Use EMOJIS para destacar pontos importantes
+- Seja EMPÁTICO mas FIRME nas recomendações
+- Use NUMEROS E PORCENTAGENS sempre que possível
+
+Exemplo de formato:
+"💡 Ação Imediata: Reduzir gastos com alimentação em R$ 200/mês
+   Valor estimado: R$ 2.400/ano
+   Como: Cozinhar mais em casa, reduzir entregas"
+
+Use TODOS os dados financeiros fornecidos no contexto.
+Seja extremamente específico em cada recomendação.
+Responda em PORTUGUÊS BRASILEIRO.`;
+
+  const messages = [
+    {
+      role: 'user',
+      content: `${systemPrompt}\n\nContexto:\n${contextText}\n\nHistórico da conversa:\n${historyText}\n\nPergunta atual: ${userMessage}`,
+    },
+  ];
+
+  const chatCompletion = await groqClient.chat.completions.create({
+    messages,
+    model: MODELS.groq,
+  });
+
+  return chatCompletion.choices[0]?.message?.content || '';
 }
 
 /**
@@ -317,7 +455,7 @@ Considere o contexto financeiro fornecido para dar dicas específicas.`;
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: OLLAMA_MODEL,
+      model: MODELS.ollama,
       prompt: fullPrompt,
       stream: false,
     }),
@@ -332,7 +470,38 @@ Considere o contexto financeiro fornecido para dar dicas específicas.`;
 }
 
 /**
- * Gera dica financeira usando Gemini ou Ollama
+ * Retorna os limites atuais do usuário para todos os provedores
+ */
+export async function getUserLimits(userId) {
+  const geminiGlobalCount = await checkGlobalLimit('gemini');
+  const geminiUserCount = await checkUserLimit(userId, 'gemini');
+  const groqGlobalCount = await checkGlobalLimit('groq');
+  const groqUserCount = await checkUserLimit(userId, 'groq');
+
+  return {
+    gemini: {
+      globalLimit: GEMINI_DAILY_LIMIT_GLOBAL,
+      globalUsed: geminiGlobalCount,
+      globalRemaining: Math.max(0, GEMINI_DAILY_LIMIT_GLOBAL - geminiGlobalCount),
+      userLimit: GEMINI_DAILY_LIMIT_PER_USER,
+      userUsed: geminiUserCount,
+      userRemaining: Math.max(0, GEMINI_DAILY_LIMIT_PER_USER - geminiUserCount),
+      available: genAI && geminiGlobalCount < GEMINI_DAILY_LIMIT_GLOBAL && geminiUserCount < GEMINI_DAILY_LIMIT_PER_USER,
+    },
+    groq: {
+      globalLimit: GROQ_DAILY_LIMIT_GLOBAL,
+      globalUsed: groqGlobalCount,
+      globalRemaining: Math.max(0, GROQ_DAILY_LIMIT_GLOBAL - groqGlobalCount),
+      userLimit: GROQ_DAILY_LIMIT_PER_USER,
+      userUsed: groqUserCount,
+      userRemaining: Math.max(0, GROQ_DAILY_LIMIT_PER_USER - groqUserCount),
+      available: groqClient && groqGlobalCount < GROQ_DAILY_LIMIT_GLOBAL && groqUserCount < GROQ_DAILY_LIMIT_PER_USER,
+    },
+  };
+}
+
+/**
+ * Gera dica financeira usando o melhor provedor disponível
  */
 export async function generateFinancialAdvice(userId, userMessage, conversationHistory = []) {
   try {
@@ -359,29 +528,36 @@ ${context.recentTransactions.map(t => `- ${t.type === 'income' ? 'Receita' : 'De
       .map(msg => `${msg.role === 'user' ? 'Usuário' : 'Assistente'}: ${msg.content}`)
       .join('\n');
 
-    // Decidir qual provedor usar
-    const provider = await getProvider(userId);
-    console.log(`Usando provedor: ${provider}`);
+    // Selecionar o melhor provedor disponível
+    const provider = await selectBestProvider(userId);
+    console.log(`[FinCash AI] Provedor selecionado: ${provider}`);
 
     let response;
-    if (provider === 'gemini') {
-      response = await generateWithGemini(contextText, historyText, userMessage);
-    } else {
-      response = await generateWithOllama(contextText, historyText, userMessage);
+    switch (provider) {
+      case 'groq':
+        response = await generateWithGroq(contextText, historyText, userMessage);
+        break;
+      case 'gemini':
+        response = await generateWithGemini(contextText, historyText, userMessage);
+        break;
+      case 'ollama':
+      default:
+        response = await generateWithOllama(contextText, historyText, userMessage);
+        break;
     }
 
     // Incrementar contador por usuário
     await checkAndIncrementRequestCount(userId, provider);
 
-    // Se for Gemini, também incrementar contador global
-    if (provider === 'gemini') {
-      await checkAndIncrementRequestCount('global', 'gemini');
+    // Incrementar contador global para provedores pagos
+    if (provider !== 'ollama') {
+      await checkAndIncrementRequestCount('global', provider);
     }
 
     return response;
   } catch (error) {
     console.error('Erro ao gerar dica financeira:', error);
-    
+
     // Fallback: dicas genéricas baseadas em regras
     return getGenericAdvice();
   }
@@ -395,6 +571,6 @@ function getGenericAdvice() {
     "Antes de fazer uma compra impulsiva, espere 24 horas e reavalie se realmente precisa.",
     "Use a regra 50/30/20: 50% para necessidades, 30% para desejos, 20% para poupança.",
   ];
-  
+
   return genericTips[Math.floor(Math.random() * genericTips.length)];
 }
