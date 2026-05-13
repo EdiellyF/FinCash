@@ -3,9 +3,14 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { toast } from 'sonner';
 import { TrendingUp, UserPlus } from 'lucide-react';
+import validator from 'validator';
 
 export default function Register() {
-  const { register: reg, handleSubmit, formState: { isSubmitting } } = useForm();
+  const {
+    register: reg,
+    handleSubmit,
+    formState: { errors, isSubmitting }
+  } = useForm();
   const { register } = useAuth();
   const navigate = useNavigate();
 
@@ -39,11 +44,39 @@ export default function Register() {
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold text-slate-500">E-mail</label>
-              <input {...reg('email')} type="email" placeholder="seu@email.com" required />
+              <input
+                {...reg('email', {
+                  required: 'E-mail obrigatório',
+                  validate: (value) =>
+                    validator.isEmail(value) || 'Digite um e-mail válido',
+                })}
+                type="email"
+                placeholder="seu@email.com"
+              />
+              {errors.email && (
+                <p className="mt-1 text-sm text-red-500">
+                  {errors.email.message}
+                </p>
+              )}
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold text-slate-500">Senha</label>
-              <input {...reg('password')} type="password" placeholder="Mínimo 6 caracteres" required />
+              <input
+                {...reg('password', {
+                  required: 'Senha obrigatória',
+                  minLength: {
+                    value: 6,
+                    message: 'A senha deve ter no mínimo 6 caracteres'
+                  }
+                })}
+                type="password"
+                placeholder="Mínimo 6 caracteres"
+              />
+              {errors.password && (
+                <p className="mt-1 text-sm text-red-500">
+                  {errors.password.message}
+                </p>
+              )}
             </div>
             <button
               type="submit"
