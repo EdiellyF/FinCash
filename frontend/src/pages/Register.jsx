@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import { toast } from 'sonner';
 import { TrendingUp, UserPlus } from 'lucide-react';
 import validator from 'validator';
+import api from '../services/api';
 
 export default function Register() {
   const {
@@ -16,9 +17,15 @@ export default function Register() {
 
   async function onSubmit(values) {
     try {
-      await register(values);
-      toast.success('Conta criada com sucesso!');
-      navigate('/');
+      await api.post('/auth/request-register', values);
+
+      toast.success('Código enviado para seu email');
+
+      navigate('/verify-email', {
+        state: {
+          email: values.email
+        }
+      });
     } catch (error) {
       toast.error(error.response?.data?.message || 'Erro ao criar conta.');
     }
