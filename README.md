@@ -76,6 +76,16 @@ npm start
 **🔗 Backend:** http://localhost:5000
 
 #### 3️⃣ Frontend
+
+Ajuste o target da api em vite.config.js para localhost:
+```bash
+'/api': {
+  target: 'http://localhost:5000',
+  changeOrigin: true,
+  secure: false
+}
+```
+
 Em outro terminal:
 
 ```bash

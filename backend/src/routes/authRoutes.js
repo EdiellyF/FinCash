@@ -13,6 +13,11 @@ import {
   registerSchema,
   resetPasswordSchema
 } from '../validations/authValidation.js';
+import {
+  requestRegister,
+  verifyRegister,
+  resendOTP
+} from '../controllers/authController.js';
 
 const router = Router();
 
@@ -21,5 +26,8 @@ router.post('/login', validate(loginSchema), login);
 router.post('/logout', logout);
 router.post('/forgot-password', validate(forgotPasswordSchema), forgotPasswordController);
 router.post('/reset-password', validate(resetPasswordSchema), resetPasswordController);
+router.post('/request-register', requestRegister);
+router.post('/verify-register', verifyRegister);
+router.post('/resend-otp', resendOTP);
 
 export default router;
