@@ -8,5 +8,7 @@ export const env = {
   geminiApiKey: process.env.GEMINI_API_KEY,
   groqApiKey: process.env.GROQ_API_KEY,
   ollamaApiUrl: process.env.OLLAMA_API_URL || 'http://localhost:11434',
-  ollamaModel: process.env.OLLAMA_MODEL || 'llama3.2'
+  ollamaModel: process.env.OLLAMA_MODEL || 'llama3.2',
+  redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
+  nodeEnv: process.env.NODE_ENV || 'development'
 };

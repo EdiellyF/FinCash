@@ -1,6 +1,8 @@
 import bcrypt from 'bcryptjs';
 import { prisma } from '../config/db.js';
 import { generateToken } from '../utils/generateToken.js';
+import { ConflictError, AuthenticationError, NotFoundError } from '../utils/errors.js';
+import { logger } from '../config/logger.js';
 
 function publicUser(user) {
   return {
@@ -14,7 +16,8 @@ function publicUser(user) {
 export async function registerUser(data) {
   const existing = await prisma.user.findUnique({ where: { email: data.email } });
   if (existing) {
-    throw new Error('E-mail já cadastrado.');
+    logger.warn('Registration attempt with existing email', { email: data.email });
+    throw new ConflictError('E-mail já cadastrado.');
   }
 
   const passwordHash = await bcrypt.hash(data.password, 10);
@@ -26,21 +29,32 @@ export async function registerUser(data) {
     }
   });
 
+  logger.info('New user registered', { userId: user.id, email: user.email });
+
   return { user: publicUser(user), token: generateToken(user.id) };
 }
 
 export async function loginUser(data) {
   const user = await prisma.user.findUnique({ where: { email: data.email } });
-  if (!user) throw new Error('Credenciais inválidas.');
+  if (!user) {
+    logger.warn('Login attempt with non-existent email', { email: data.email });
+    throw new AuthenticationError('Credenciais inválidas.');
+  }
 
   const passwordMatch = await bcrypt.compare(data.password, user.passwordHash);
-  if (!passwordMatch) throw new Error('Credenciais inválidas.');
+  if (!passwordMatch) {
+    logger.warn('Login attempt with wrong password', { email: data.email, userId: user.id });
+    throw new AuthenticationError('Credenciais inválidas.');
+  }
+
+  logger.info('User logged in successfully', { userId: user.id, email: user.email });
 
   return { user: publicUser(user), token: generateToken(user.id) };
 }
 
 export async function forgotPassword(email) {
   const user = await prisma.user.findUnique({ where: { email } });
+  logger.info('Password reset requested', { email, found: !!user });
   return {
     found: !!user,
     note: 'Implementação simplificada. Em produção, gere token seguro e envie por e-mail.'
@@ -49,13 +63,15 @@ export async function forgotPassword(email) {
 
 export async function resetPassword(email, newPassword) {
   const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) throw new Error('Usuário não encontrado.');
+  if (!user) throw new NotFoundError('Usuário não encontrado.');
 
   const passwordHash = await bcrypt.hash(newPassword, 10);
   await prisma.user.update({
     where: { email },
     data: { passwordHash }
   });
+
+  logger.info('Password reset successfully', { userId: user.id, email });
 
   return { success: true };
 }

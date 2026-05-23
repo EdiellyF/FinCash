@@ -1,11 +1,12 @@
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
+import { AuthenticationError } from '../utils/errors.js';
 
 export function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
 
   if (!authHeader?.startsWith('Bearer ')) {
-    return res.status(401).json({ message: 'Token não informado.' });
+    throw new AuthenticationError('Token não informado.');
   }
 
   const token = authHeader.split(' ')[1];
@@ -15,6 +16,6 @@ export function authMiddleware(req, res, next) {
     req.user = { id: payload.userId };
     next();
   } catch {
-    return res.status(401).json({ message: 'Token inválido ou expirado.' });
+    throw new AuthenticationError('Token inválido ou expirado.');
   }
 }

@@ -4,9 +4,11 @@ import AppShell from '../components/layout/AppShell';
 import PageCard from '../components/ui/PageCard';
 import FormModal from '../components/ui/FormModal';
 import BasicTable from '../components/tables/BasicTable';
+import TransactionExtraction from '../components/ui/TransactionExtraction';
 import { currency, dateBR } from '../utils/format';
 import api from '../services/api';
 import { toast } from 'sonner';
+
 
 const emptyForm = {
   title: '',
@@ -23,6 +25,9 @@ export default function Transactions() {
   const [filters, setFilters] = useState({ type: '', categoryId: '', startDate: '', endDate: '' });
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  
+  
+  
 
   const { register, handleSubmit, reset } = useForm({ defaultValues: emptyForm });
 
@@ -98,7 +103,12 @@ export default function Transactions() {
     <AppShell>
       <PageCard
         title="Transações"
-        actions={<button onClick={handleNew} className="rounded-2xl bg-blue-600 px-4 py-3 font-semibold text-white">Nova transação</button>}
+        actions={
+          <div className="flex gap-3">
+            <TransactionExtraction onTransactionsSaved={loadTransactions} />
+            <button onClick={handleNew} className="rounded-2xl bg-blue-600 px-4 py-3 font-semibold text-white">Nova transação</button>
+          </div>
+        }
       >
         <div className="mb-4 grid gap-3 md:grid-cols-4">
           <select value={filters.type} onChange={(e) => setFilters({ ...filters, type: e.target.value })}>

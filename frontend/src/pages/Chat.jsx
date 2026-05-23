@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
+import { io } from 'socket.io-client';
 import api from '../services/api';
 import AppShell from '../components/layout/AppShell';
-import { Send, User, Loader2, Download, AlertCircle } from 'lucide-react';
+import { Send, User, Loader2, Download, AlertCircle, FileText, TrendingUp, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 // SVG personalizados com tema verde
@@ -108,7 +109,49 @@ export default function Chat() {
   const [loading, setLoading] = useState(false);
   const [showAnalysisOptions, setShowAnalysisOptions] = useState(true);
   const [limits, setLimits] = useState(null);
+  const [selectedPeriod, setSelectedPeriod] = useState('30d');
+  const [showCompareModal, setShowCompareModal] = useState(false);
+  const [compareData, setCompareData] = useState(null);
+  const [compareLoading, setCompareLoading] = useState(false);
+  const [streamingMessage, setStreamingMessage] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
   const messagesEndRef = useRef(null);
+  const socketRef = useRef(null);
+
+  // Conectar ao WebSocket ao montar
+  useEffect(() => {
+    const socket = io('http://localhost:5000', {
+      transports: ['websocket'],
+      reconnection: true,
+    });
+
+    socketRef.current = socket;
+
+    socket.on('chat:chunk', ({ chunk, done }) => {
+      if (done) {
+        setIsStreaming(false);
+        setStreamingMessage('');
+      } else {
+        setStreamingMessage(prev => prev + chunk);
+      }
+    });
+
+    socket.on('chat:context', ({ context }) => {
+      console.log('Contexto recebido:', context);
+    });
+
+    socket.on('connect', () => {
+      console.log('Conectado ao WebSocket');
+    });
+
+    socket.on('disconnect', () => {
+      console.log('Desconectado do WebSocket');
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
 
   // Carregar histórico ao montar
   useEffect(() => {
@@ -156,29 +199,51 @@ export default function Chat() {
     setMessages(prev => [...prev, { role: 'user', content: messageToSend, createdAt: new Date() }]);
 
     try {
-      const response = await api.post('/chat/message', { message: messageToSend });
-      
-      // Remover tudo antes de ## da resposta
-      let cleanContent = response.data.message;
-      const hashIndex = cleanContent.indexOf('##');
-      if (hashIndex !== -1) {
-        cleanContent = cleanContent.substring(hashIndex);
+      // Usar streaming se o WebSocket estiver conectado
+      if (socketRef.current?.connected) {
+        setIsStreaming(true);
+        setStreamingMessage('');
+        
+        // Criar mensagem temporária para streaming
+        const tempMessageId = Date.now();
+        setMessages(prev => [...prev, { 
+          role: 'assistant', 
+          content: '', 
+          id: tempMessageId,
+          createdAt: new Date(),
+          isStreaming: true 
+        }]);
+
+        await api.post('/chat/message-stream', { 
+          message: messageToSend, 
+          period: selectedPeriod,
+          socketId: socketRef.current.id 
+        });
+
+        // Quando o streaming terminar, atualizar a mensagem
+        setIsStreaming(false);
+      } else {
+        // Fallback para método tradicional sem streaming
+        const response = await api.post('/chat/message', { message: messageToSend, period: selectedPeriod });
+        
+        let cleanContent = response.data.message;
+        const hashIndex = cleanContent.indexOf('##');
+        if (hashIndex !== -1) {
+          cleanContent = cleanContent.substring(hashIndex);
+        }
+        
+        setMessages(prev => [...prev, { 
+          role: 'assistant', 
+          content: cleanContent, 
+          id: response.data.id,
+          createdAt: response.data.createdAt 
+        }]);
       }
       
-      // Adicionar resposta do assistente
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: cleanContent, 
-        id: response.data.id,
-        createdAt: response.data.createdAt 
-      }]);
-      
-      // Recarregar limites após envio
       await loadLimits();
     } catch (error) {
       console.error('Erro ao enviar mensagem:', error);
       toast.error('Erro ao gerar análise. Tente novamente.');
-      // Remover mensagem do usuário em caso de erro
       setMessages(prev => prev.slice(0, -1));
     } finally {
       setLoading(false);
@@ -198,23 +263,59 @@ export default function Chat() {
     setShowAnalysisOptions(true);
   };
 
-  const exportAnalysis = () => {
-    const analysisText = messages
-      .filter(msg => msg.role === 'assistant')
-      .map(msg => msg.content)
-      .join('\n\n---\n\n');
-    
-    const blob = new Blob([analysisText], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `analise-financeira-${new Date().toISOString().split('T')[0]}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    toast.success('Análise exportada com sucesso!');
+  const handleComparePeriods = async () => {
+    try {
+      setCompareLoading(true);
+      const response = await api.post('/chat/compare', {
+        periods: ['7d', '30d', '365d']
+      });
+      setCompareData(response.data);
+      setShowCompareModal(true);
+    } catch (error) {
+      console.error('Erro ao comparar períodos:', error);
+      toast.error('Erro ao comparar períodos.');
+    } finally {
+      setCompareLoading(false);
+    }
+  };
+
+  const exportAnalysis = async (format = 'txt') => {
+    if (format === 'pdf') {
+      try {
+        const response = await api.get('/chat/export-pdf', {
+          responseType: 'blob',
+        });
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `analise-financeira-${new Date().toISOString().split('T')[0]}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        toast.success('Análise exportada em PDF!');
+      } catch (error) {
+        console.error('Erro ao exportar PDF:', error);
+        toast.error('Erro ao exportar PDF. Tente exportar em texto.');
+      }
+    } else {
+      const analysisText = messages
+        .filter(msg => msg.role === 'assistant')
+        .map(msg => msg.content)
+        .join('\n\n---\n\n');
+      
+      const blob = new Blob([analysisText], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `analise-financeira-${new Date().toISOString().split('T')[0]}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast.success('Análise exportada com sucesso!');
+    }
   };
 
   return (
@@ -226,15 +327,48 @@ export default function Chat() {
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Análise Financeira IA</h1>
           </div>
           <div className="flex gap-2">
+            {/* Seletor de período */}
+            <select
+              value={selectedPeriod}
+              onChange={(e) => setSelectedPeriod(e.target.value)}
+              className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+            >
+              <option value="7d">7 dias</option>
+              <option value="30d">30 dias</option>
+              <option value="365d">1 ano</option>
+            </select>
             {messages.length > 0 && (
               <>
                 <button
-                  onClick={exportAnalysis}
-                  className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                  onClick={handleComparePeriods}
+                  disabled={compareLoading}
+                  className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 disabled:opacity-50"
                 >
-                  <Download size={16} />
-                  <span className="hidden sm:inline">Exportar</span>
+                  {compareLoading ? <Loader2 size={16} className="animate-spin" /> : <TrendingUp size={16} />}
+                  <span className="hidden sm:inline">Comparar</span>
                 </button>
+                <div className="relative group">
+                  <button className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600">
+                    <Download size={16} />
+                    <span className="hidden sm:inline">Exportar</span>
+                  </button>
+                  <div className="absolute right-0 mt-2 w-40 rounded-lg border border-gray-200 bg-white py-1 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all dark:border-gray-700 dark:bg-gray-800">
+                    <button
+                      onClick={() => exportAnalysis('pdf')}
+                      className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                    >
+                      <Download size={14} />
+                      PDF
+                    </button>
+                    <button
+                      onClick={() => exportAnalysis('txt')}
+                      className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                    >
+                      <FileText size={14} />
+                      Texto
+                    </button>
+                  </div>
+                </div>
                 <button
                   onClick={resetAnalysis}
                   className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
@@ -256,22 +390,49 @@ export default function Chat() {
                   Análise IA
                 </span>
               </div>
-              <div className="flex gap-4 text-sm">
+              <div className="flex items-center gap-4 text-sm">
                 <div className="text-gray-600 dark:text-gray-400">
-                  <span className="font-semibold text-gray-900 dark:text-white">{limits.userUsed}</span>/{limits.userLimit} hoje
+                  <span className="font-semibold text-gray-900 dark:text-white">{limits.groq?.userUsed || 0}</span>/{limits.groq?.userLimit || 25} hoje
+                </div>
+                {/* Barra de progresso */}
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-24 rounded-full bg-gray-300 dark:bg-gray-600">
+                    <div
+                      className="h-2 rounded-full bg-emerald-500 transition-all"
+                      style={{ width: `${limits.groq?.userPercentage || 0}%` }}
+                    />
+                  </div>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    {Math.round(limits.groq?.userPercentage || 0)}%
+                  </span>
                 </div>
               </div>
             </div>
-            {limits.userRemaining <= 0 && (
+            {/* Aviso de limite próximo */}
+            {limits.groq?.nearLimit && limits.groq?.userRemaining > 0 && (
               <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/20">
                 <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+                  <AlertCircle size={18} />
+                  <span className="text-sm font-medium">
+                    Limite próximo de ser atingido
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  Você tem apenas {limits.groq?.userRemaining || 0} análise(ões) restante(s) hoje.
+                </p>
+              </div>
+            )}
+            {/* Aviso de limite atingido */}
+            {limits.groq?.userRemaining <= 0 && (
+              <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-900/20">
+                <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
                   <AlertCircle size={18} />
                   <span className="text-sm font-medium">
                     Limite diário atingido
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                  Você já fez 2 análises hoje. Você pode visualizar o histórico, mas não poderá fazer novas análises até amanhã.
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+                  Você já fez {limits.groq?.userLimit || 25} análises hoje. Você pode visualizar o histórico, mas não poderá fazer novas análises até amanhã.
                 </p>
               </div>
             )}
@@ -353,7 +514,12 @@ export default function Chat() {
                         : 'bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-gray-100'
                     }`}
                   >
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</p>
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                      {msg.isStreaming ? streamingMessage : msg.content}
+                    </p>
+                    {msg.isStreaming && (
+                      <span className="inline-block ml-1 h-4 w-1 bg-emerald-500 animate-pulse" />
+                    )}
                     <p className={`mt-1 text-xs ${msg.role === 'user' ? 'text-emerald-200' : 'text-gray-500 dark:text-gray-400'}`}>
                       {new Date(msg.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                     </p>
@@ -365,7 +531,7 @@ export default function Chat() {
                   )}
                 </div>
               ))}
-              {loading && (
+              {loading && !isStreaming && (
                 <div className="flex gap-3">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
                     <div className="h-5 w-5">
@@ -376,6 +542,21 @@ export default function Chat() {
                     <Loader2 size={16} className="animate-spin text-emerald-500" />
                     <span className="text-sm text-gray-600 dark:text-gray-400">
                       Analisando suas finanças...
+                    </span>
+                  </div>
+                </div>
+              )}
+              {isStreaming && (
+                <div className="flex gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
+                    <div className="h-5 w-5">
+                      <SparklesIcon />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-gray-700">
+                    <Loader2 size={16} className="animate-spin text-emerald-500" />
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      Gerando resposta...
                     </span>
                   </div>
                 </div>
@@ -413,6 +594,97 @@ export default function Chat() {
           </form>
         )}
       </div>
+
+      {/* Modal de Comparação de Períodos */}
+      {showCompareModal && compareData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">Comparação de Períodos</h2>
+              <button
+                onClick={() => setShowCompareModal(false)}
+                className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              {/* Tabela comparativa */}
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Métrica</th>
+                      {compareData.periods.map((p) => (
+                        <th key={p.period} className="px-4 py-3 text-right text-sm font-semibold text-gray-900 dark:text-white">
+                          {p.period === '7d' ? '7 dias' : p.period === '30d' ? '30 dias' : '1 ano'}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">Saldo</td>
+                      {compareData.periods.map((p) => (
+                        <td key={p.period} className="px-4 py-3 text-right text-sm font-medium text-gray-900 dark:text-white">
+                          R$ {p.balance.toFixed(2)}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">Receitas</td>
+                      {compareData.periods.map((p) => (
+                        <td key={p.period} className="px-4 py-3 text-right text-sm font-medium text-emerald-600 dark:text-emerald-400">
+                          R$ {p.totalIncome.toFixed(2)}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">Despesas</td>
+                      {compareData.periods.map((p) => (
+                        <td key={p.period} className="px-4 py-3 text-right text-sm font-medium text-red-600 dark:text-red-400">
+                          R$ {p.totalExpense.toFixed(2)}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">Média diária (receitas)</td>
+                      {compareData.periods.map((p) => (
+                        <td key={p.period} className="px-4 py-3 text-right text-sm font-medium text-gray-900 dark:text-white">
+                          R$ {(p.totalIncome / p.periodDays).toFixed(2)}
+                        </td>
+                      ))}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Análise textual */}
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+                <h3 className="mb-2 text-sm font-semibold text-gray-900 dark:text-white">Análise da Evolução</h3>
+                <p className="text-sm text-gray-700 dark:text-gray-300">
+                  {compareData.periods.length >= 2 && (
+                    <>
+                      Comparando os períodos de {compareData.periods[0].period === '7d' ? '7 dias' : compareData.periods[0].period === '30d' ? '30 dias' : '1 ano'} e {compareData.periods[1].period === '7d' ? '7 dias' : compareData.periods[1].period === '30d' ? '30 dias' : '1 ano'}:
+                      {compareData.periods[1].totalIncome > compareData.periods[0].totalIncome ? (
+                        <span className="text-emerald-600 dark:text-emerald-400"> Suas receitas aumentaram em {((compareData.periods[1].totalIncome - compareData.periods[0].totalIncome) / compareData.periods[0].totalIncome * 100).toFixed(1)}%.</span>
+                      ) : (
+                        <span className="text-red-600 dark:text-red-400"> Suas receitas diminuíram em {((compareData.periods[0].totalIncome - compareData.periods[1].totalIncome) / compareData.periods[0].totalIncome * 100).toFixed(1)}%.</span>
+                      )}
+                      {compareData.periods[1].totalExpense > compareData.periods[0].totalExpense ? (
+                        <span className="text-red-600 dark:text-red-400"> Suas despesas aumentaram em {((compareData.periods[1].totalExpense - compareData.periods[0].totalExpense) / compareData.periods[0].totalExpense * 100).toFixed(1)}%.</span>
+                      ) : (
+                        <span className="text-emerald-600 dark:text-emerald-400"> Suas despesas diminuíram em {((compareData.periods[0].totalExpense - compareData.periods[1].totalExpense) / compareData.periods[0].totalExpense * 100).toFixed(1)}%.</span>
+                      )}
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 }

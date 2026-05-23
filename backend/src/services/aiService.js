@@ -2,6 +2,8 @@ import { PrismaClient } from '@prisma/client';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import Groq from 'groq-sdk';
 import { env } from '../config/env.js';
+import { generateCacheKey, getCachedResponse, setCachedResponse } from '../config/redisClient.js';
+import crypto from 'crypto';
 
 const prisma = new PrismaClient();
 
@@ -15,25 +17,31 @@ const groqClient = env.groqApiKey ? new Groq({ apiKey: env.groqApiKey }) : null;
 const OLLAMA_API_URL = env.ollamaApiUrl || 'http://localhost:11434';
 const OLLAMA_MODEL = env.ollamaModel || 'llama3.2';
 
-// Limites de requisições
+// Limites de requisições (otimizados para estudantes)
 const GEMINI_DAILY_LIMIT_GLOBAL = 20;
-const GEMINI_DAILY_LIMIT_PER_USER = 2;
+const GEMINI_DAILY_LIMIT_PER_USER = 5; // Aumentado de 2 para 5 para estudantes
 const GROQ_DAILY_LIMIT_GLOBAL = 100;
-const GROQ_DAILY_LIMIT_PER_USER = 20;
+const GROQ_DAILY_LIMIT_PER_USER = 25; // Aumentado de 20 para 25 para estudantes
 
 // Modelos disponíveis
 const MODELS = {
-  gemini: 'gemini-flash-latest',
+  gemini: 'gemini-1.5-pro', // Atualizado para gemini-1.5-pro
   groq: 'llama-3.3-70b-versatile',
   ollama: env.ollamaModel || 'llama3.2',
 };
 
 /**
- * Obter contexto financeiro do usuário
+ * Obter contexto financeiro do usuário com período configurável
  */
-async function getFinancialContext(userId) {
+async function getFinancialContext(userId, period = '30d') {
   const now = new Date();
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const periodDays = {
+    '7d': 7,
+    '30d': 30,
+    '365d': 365,
+  }[period] || 30;
+
+  const startDate = new Date(now.getTime() - periodDays * 24 * 60 * 60 * 1000);
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
 
@@ -41,7 +49,7 @@ async function getFinancialContext(userId) {
     where: {
       userId,
       transactionDate: {
-        gte: thirtyDaysAgo,
+        gte: startDate,
       },
     },
     include: {
@@ -50,7 +58,7 @@ async function getFinancialContext(userId) {
     orderBy: {
       transactionDate: 'desc',
     },
-    take: 20,
+    take: 50,
   });
 
   const goals = await prisma.goal.findMany({
@@ -88,6 +96,29 @@ async function getFinancialContext(userId) {
     budgets,
     currentMonth,
     currentYear,
+    period,
+    periodDays,
+  };
+}
+
+/**
+ * Obter contexto comparativo entre múltiplos períodos
+ */
+export async function getComparativeContext(userId, periods = ['7d', '30d', '365d']) {
+  const contexts = await Promise.all(
+    periods.map(period => getFinancialContext(userId, period))
+  );
+
+  return {
+    periods: contexts.map(ctx => ({
+      period: ctx.period,
+      periodDays: ctx.periodDays,
+      balance: ctx.balance,
+      totalIncome: ctx.totalIncome,
+      totalExpense: ctx.totalExpense,
+    })),
+    currentGoals: contexts[0].goals,
+    currentBudgets: contexts[0].budgets,
   };
 }
 
@@ -228,15 +259,22 @@ async function selectBestProvider(userId) {
 async function generateWithGemini(contextText, historyText, userMessage) {
   const model = genAI.getGenerativeModel({ model: MODELS.gemini });
 
-  const systemPrompt = `Você é um CONSULTOR FINANCEIRO ESPECIALIZADO com mais de 20 anos de experiência em finanças pessoais e investimentos.
+  const systemPrompt = `Você é um CONSULTOR FINANCEIRO ESPECIALIZADO em ajudar ESTUDANTES UNIVERSITÁRIOS de Palmas, Tocantins, com mais de 20 anos de experiência em finanças pessoais.
 
-Sua MISSÃO é fornecer uma análise financeira EXTREMAMENTE DETALHADA, PROFUNDAMENTE PERSONALIZADA e PRATICAMENTE APLICÁVEL.
+CONTEXTO DO PÚBLICO:
+- Estudantes universitários de Palmas/TO (IFTO, UFT, faculdades privadas)
+- Renda típica: bolsa-auxílio (R$ 400-600/mês) ou trabalho informal
+- Gastos principais: alimentação no campus, transporte coletivo, moradia (república/alojamento), materiais de estudo
+- Metas comuns: notebook, viagem de formatura, reserva para emergências, cursos complementares
+- Custo de vida de Palmas: alimentação mais barata no campus, transporte R$ 4,50 (urbano), aluguel de república R$ 300-500
+
+Sua MISSÃO é fornecer uma análise financeira EXTREMAMENTE DETALHADA, PROFUNDAMENTE PERSONALIZADA e PRATICAMENTE APLICÁVEL para estudantes.
 
 IMPORTANTE - SUA RESPOSTA DEVE SER:
 - MUITO LONGA (mínimo 1000 palavras, idealmente 1500-2000)
 - ALTAMENTE ESTRUTURADA em seções claras
 - RICA EM DADOS NÚMERICOS E PORCENTAGENS
-- COM EXEMPLOS PRÁTICOS E CENÁRIOS REAIS
+- COM EXEMPLOS PRÁTICOS E CENÁRIOS REAIS de estudantes
 - COM AÇÕES ESPECÍFICAS E IMEDIATAS
 
 ESTRUTURA OBRIGATÓRIA DA RESPOSTA:
@@ -247,30 +285,30 @@ ESTRUTURA OBRIGATÓRIA DA RESPOSTA:
    - Principal oportunidade
 
 2. 📊 ANÁLISE DE RECEITAS (150-200 palavras)
-   - Total de receitas e comparação com média brasileira
-   - Fontes de renda e diversificação
-   - Tendência de receitas nos últimos 30 dias
-   - Recomendações para aumentar receitas
+   - Total de receitas e comparação com renda típica de estudante em Palmas
+   - Fontes de renda (bolsa, trabalho familiar, freelances)
+   - Tendência de receitas no período analisado
+   - Recomendações para aumentar renda (estudante-friendly)
 
 3. 💸 ANÁLISE DE DESPESAS (200-250 palavras)
    - Total de despesas e percentual por categoria
    - Top 3 categorias de gastos com valores absolutos e relativos
-   - Identificação de gastos desnecessários ou excessivos
-   - Comparação mês atual vs mês anterior
-   - Onde é possível economizar imediatamente
+   - Identificação de gastos desnecessários ou excessivos para estudante
+   - Comparação com período anterior
+   - Onde é possível economizar imediatamente (foco em custo estudantil)
 
 4. 🎯 ORÇAMENTO (150-200 palavras)
    - Status de cada orçamento definido
    - Categorias estouradas com valores excedentes
    - Categorias dentro do limite com margem
-   - Ajustes necessários no orçamento
+   - Ajustes necessários no orçamento estudantil
 
 5. 🏆 METAS FINANCEIRAS (200-250 palavras)
    - Progresso de cada meta em % e valor
    - Tempo restante para cada meta
    - Se está no caminho certo (sim/não e por quê)
    - Ajustes necessários para atingir metas no prazo
-   - Sugestão de reorganização de prioridades
+   - Sugestão de reorganização de prioridades (metas típicas de estudante)
 
 6. 📈 DADOS NÚMERICOS ESSENCIAIS (150-200 palavras)
    - Saldo atual e sua evolução
@@ -284,6 +322,7 @@ ESTRUTURA OBRIGATÓRIA DA RESPOSTA:
    - 5 ações para CURTO PRAZO (este mês)
    - 5 ações para MÉDIO PRAZO (próximos 3 meses)
    - Cada recomendação deve ter valor estimado de economia
+   - Foco em economia estudantil (restaurante universitário, transporte, moradia)
 
 8. 📅 PLANO DE AÇÃO DETALHADO (200-250 palavras)
    - Semana 1: 3 tarefas específicas
@@ -293,9 +332,9 @@ ESTRUTURA OBRIGATÓRIA DA RESPOSTA:
    - Cada tarefa com responsável e prazo
 
 9. ⚠️ RISCOS E ALERTAS (150-200 palavras)
-   - 5 riscos financeiros atuais
+   - 5 riscos financeiros atuais típicos de estudantes
    - 5 sinais de alerta a monitorar
-   - 5 armadilhas comuns a evitar
+   - 5 armadilhas comuns a evitar (compras impulsivas, apps de delivery, assinaturas)
    - Plano de contingência
 
 10. 🔮 PROJEÇÕES E CENÁRIOS (200-250 palavras)
@@ -310,11 +349,12 @@ ESTILO DE COMUNICAÇÃO:
 - Use EMOJIS para destacar pontos importantes
 - Seja EMPÁTICO mas FIRME nas recomendações
 - Use NUMEROS E PORCENTAGENS sempre que possível
+- CONSIDERE A REALIDADE DE ESTUDANTES DE PALMAS/TO
 
 Exemplo de formato:
-"💡 Ação Imediata: Reduzir gastos com alimentação em R$ 200/mês
-   Valor estimado: R$ 2.400/ano
-   Como: Cozinhar mais em casa, reduzir entregas"
+"💡 Ação Imediata: Reduzir gastos com alimentação em R$ 150/mês
+   Valor estimado: R$ 1.800/ano
+   Como: Priorizar restaurante universitário do IFTO/UFT (R$ 2-3), reduzir entregas"
 
 Use TODOS os dados financeiros fornecidos no contexto.
 Seja extremamente específico em cada recomendação.
@@ -330,15 +370,22 @@ Responda em PORTUGUÊS BRASILEIRO.`;
  * Gera dica financeira usando GROQ
  */
 async function generateWithGroq(contextText, historyText, userMessage) {
-  const systemPrompt = `Você é um CONSULTOR FINANCEIRO ESPECIALIZADO com mais de 20 anos de experiência em finanças pessoais e investimentos.
+  const systemPrompt = `Você é um CONSULTOR FINANCEIRO ESPECIALIZADO em ajudar ESTUDANTES UNIVERSITÁRIOS de Palmas, Tocantins, com mais de 20 anos de experiência em finanças pessoais.
 
-Sua MISSÃO é fornecer uma análise financeira EXTREMAMENTE DETALHADA, PROFUNDAMENTE PERSONALIZADA e PRATICAMENTE APLICÁVEL.
+CONTEXTO DO PÚBLICO:
+- Estudantes universitários de Palmas/TO (IFTO, UFT, faculdades privadas)
+- Renda típica: bolsa-auxílio (R$ 400-600/mês) ou trabalho informal
+- Gastos principais: alimentação no campus, transporte coletivo, moradia (república/alojamento), materiais de estudo
+- Metas comuns: notebook, viagem de formatura, reserva para emergências, cursos complementares
+- Custo de vida de Palmas: alimentação mais barata no campus, transporte R$ 4,50 (urbano), aluguel de república R$ 300-500
+
+Sua MISSÃO é fornecer uma análise financeira EXTREMAMENTE DETALHADA, PROFUNDAMENTE PERSONALIZADA e PRATICAMENTE APLICÁVEL para estudantes.
 
 IMPORTANTE - SUA RESPOSTA DEVE SER:
 - MUITO LONGA (mínimo 1000 palavras, idealmente 1500-2000)
 - ALTAMENTE ESTRUTURADA em seções claras
 - RICA EM DADOS NÚMERICOS E PORCENTAGENS
-- COM EXEMPLOS PRÁTICOS E CENÁRIOS REAIS
+- COM EXEMPLOS PRÁTICOS E CENÁRIOS REAIS de estudantes
 - COM AÇÕES ESPECÍFICAS E IMEDIATAS
 
 ESTRUTURA OBRIGATÓRIA DA RESPOSTA:
@@ -349,30 +396,30 @@ ESTRUTURA OBRIGATÓRIA DA RESPOSTA:
    - Principal oportunidade
 
 2. 📊 ANÁLISE DE RECEITAS (150-200 palavras)
-   - Total de receitas e comparação com média brasileira
-   - Fontes de renda e diversificação
-   - Tendência de receitas nos últimos 30 dias
-   - Recomendações para aumentar receitas
+   - Total de receitas e comparação com renda típica de estudante em Palmas
+   - Fontes de renda (bolsa, trabalho familiar, freelances)
+   - Tendência de receitas no período analisado
+   - Recomendações para aumentar renda (estudante-friendly)
 
 3. 💸 ANÁLISE DE DESPESAS (200-250 palavras)
    - Total de despesas e percentual por categoria
    - Top 3 categorias de gastos com valores absolutos e relativos
-   - Identificação de gastos desnecessários ou excessivos
-   - Comparação mês atual vs mês anterior
-   - Onde é possível economizar imediatamente
+   - Identificação de gastos desnecessários ou excessivos para estudante
+   - Comparação com período anterior
+   - Onde é possível economizar imediatamente (foco em custo estudantil)
 
 4. 🎯 ORÇAMENTO (150-200 palavras)
    - Status de cada orçamento definido
    - Categorias estouradas com valores excedentes
    - Categorias dentro do limite com margem
-   - Ajustes necessários no orçamento
+   - Ajustes necessários no orçamento estudantil
 
 5. 🏆 METAS FINANCEIRAS (200-250 palavras)
    - Progresso de cada meta em % e valor
    - Tempo restante para cada meta
    - Se está no caminho certo (sim/não e por quê)
    - Ajustes necessários para atingir metas no prazo
-   - Sugestão de reorganização de prioridades
+   - Sugestão de reorganização de prioridades (metas típicas de estudante)
 
 6. 📈 DADOS NÚMERICOS ESSENCIAIS (150-200 palavras)
    - Saldo atual e sua evolução
@@ -386,6 +433,7 @@ ESTRUTURA OBRIGATÓRIA DA RESPOSTA:
    - 5 ações para CURTO PRAZO (este mês)
    - 5 ações para MÉDIO PRAZO (próximos 3 meses)
    - Cada recomendação deve ter valor estimado de economia
+   - Foco em economia estudantil (restaurante universitário, transporte, moradia)
 
 8. 📅 PLANO DE AÇÃO DETALHADO (200-250 palavras)
    - Semana 1: 3 tarefas específicas
@@ -395,9 +443,9 @@ ESTRUTURA OBRIGATÓRIA DA RESPOSTA:
    - Cada tarefa com responsável e prazo
 
 9. ⚠️ RISCOS E ALERTAS (150-200 palavras)
-   - 5 riscos financeiros atuais
+   - 5 riscos financeiros atuais típicos de estudantes
    - 5 sinais de alerta a monitorar
-   - 5 armadilhas comuns a evitar
+   - 5 armadilhas comuns a evitar (compras impulsivas, apps de delivery, assinaturas)
    - Plano de contingência
 
 10. 🔮 PROJEÇÕES E CENÁRIOS (200-250 palavras)
@@ -412,11 +460,12 @@ ESTILO DE COMUNICAÇÃO:
 - Use EMOJIS para destacar pontos importantes
 - Seja EMPÁTICO mas FIRME nas recomendações
 - Use NUMEROS E PORCENTAGENS sempre que possível
+- CONSIDERE A REALIDADE DE ESTUDANTES DE PALMAS/TO
 
 Exemplo de formato:
-"💡 Ação Imediata: Reduzir gastos com alimentação em R$ 200/mês
-   Valor estimado: R$ 2.400/ano
-   Como: Cozinhar mais em casa, reduzir entregas"
+"💡 Ação Imediata: Reduzir gastos com alimentação em R$ 150/mês
+   Valor estimado: R$ 1.800/ano
+   Como: Priorizar restaurante universitário do IFTO/UFT (R$ 2-3), reduzir entregas"
 
 Use TODOS os dados financeiros fornecidos no contexto.
 Seja extremamente específico em cada recomendação.
@@ -478,6 +527,10 @@ export async function getUserLimits(userId) {
   const groqGlobalCount = await checkGlobalLimit('groq');
   const groqUserCount = await checkUserLimit(userId, 'groq');
 
+  // Calcular porcentagem de uso e detectar limite próximo
+  const geminiUserPercentage = (geminiUserCount / GEMINI_DAILY_LIMIT_PER_USER) * 100;
+  const groqUserPercentage = (groqUserCount / GROQ_DAILY_LIMIT_PER_USER) * 100;
+
   return {
     gemini: {
       globalLimit: GEMINI_DAILY_LIMIT_GLOBAL,
@@ -486,6 +539,8 @@ export async function getUserLimits(userId) {
       userLimit: GEMINI_DAILY_LIMIT_PER_USER,
       userUsed: geminiUserCount,
       userRemaining: Math.max(0, GEMINI_DAILY_LIMIT_PER_USER - geminiUserCount),
+      userPercentage: Math.min(100, geminiUserPercentage),
+      nearLimit: geminiUserCount >= GEMINI_DAILY_LIMIT_PER_USER - 1,
       available: genAI && geminiGlobalCount < GEMINI_DAILY_LIMIT_GLOBAL && geminiUserCount < GEMINI_DAILY_LIMIT_PER_USER,
     },
     groq: {
@@ -495,6 +550,8 @@ export async function getUserLimits(userId) {
       userLimit: GROQ_DAILY_LIMIT_PER_USER,
       userUsed: groqUserCount,
       userRemaining: Math.max(0, GROQ_DAILY_LIMIT_PER_USER - groqUserCount),
+      userPercentage: Math.min(100, groqUserPercentage),
+      nearLimit: groqUserCount >= GROQ_DAILY_LIMIT_PER_USER - 1,
       available: groqClient && groqGlobalCount < GROQ_DAILY_LIMIT_GLOBAL && groqUserCount < GROQ_DAILY_LIMIT_PER_USER,
     },
   };
@@ -503,15 +560,27 @@ export async function getUserLimits(userId) {
 /**
  * Gera dica financeira usando o melhor provedor disponível
  */
-export async function generateFinancialAdvice(userId, userMessage, conversationHistory = []) {
+export async function generateFinancialAdvice(userId, userMessage, conversationHistory = [], period = '30d') {
   try {
-    const context = await getFinancialContext(userId);
+    // Gerar hash da mensagem para cache
+    const messageHash = crypto.createHash('md5').update(userMessage + period).digest('hex');
+    const cacheKey = generateCacheKey(userId, messageHash, period);
+
+    // Tentar obter do cache
+    const cachedResponse = await getCachedResponse(cacheKey);
+    if (cachedResponse) {
+      console.log(`[FinCash AI] Resposta recuperada do cache para ${period}`);
+      return cachedResponse;
+    }
+
+    const context = await getFinancialContext(userId, period);
 
     const contextText = `
 Contexto Financeiro do Usuário:
+- Período analisado: ${period} (${context.periodDays} dias)
 - Saldo atual: R$ ${context.balance.toFixed(2)}
-- Receitas últimos 30 dias: R$ ${context.totalIncome.toFixed(2)}
-- Despesas últimos 30 dias: R$ ${context.totalExpense.toFixed(2)}
+- Receitas no período: R$ ${context.totalIncome.toFixed(2)}
+- Despesas no período: R$ ${context.totalExpense.toFixed(2)}
 - Mês atual: ${context.currentMonth}/${context.currentYear}
 
 Metas Financeiras:
@@ -545,6 +614,10 @@ ${context.recentTransactions.map(t => `- ${t.type === 'income' ? 'Receita' : 'De
         response = await generateWithOllama(contextText, historyText, userMessage);
         break;
     }
+
+    // Salvar no cache (1 hora para respostas comuns, 24h para análises completas)
+    const ttl = userMessage.includes('análise completa') || userMessage.includes('visão geral') ? 86400 : 3600;
+    await setCachedResponse(cacheKey, response, ttl);
 
     // Incrementar contador por usuário
     await checkAndIncrementRequestCount(userId, provider);

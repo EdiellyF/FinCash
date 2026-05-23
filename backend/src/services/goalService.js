@@ -1,4 +1,5 @@
 import { prisma } from '../config/db.js';
+import { NotFoundError } from '../utils/errors.js';
 
 export async function listGoals(userId) {
   const rows = await prisma.goal.findMany({
@@ -28,7 +29,9 @@ export async function createGoal(userId, data) {
 
 export async function updateGoal(userId, id, data) {
   const goal = await prisma.goal.findFirst({ where: { id, userId } });
-  if (!goal) throw new Error('Meta não encontrada.');
+  if (!goal) {
+    throw new NotFoundError('Meta não encontrada.');
+  }
 
   return prisma.goal.update({
     where: { id },
@@ -43,7 +46,9 @@ export async function updateGoal(userId, id, data) {
 
 export async function removeGoal(userId, id) {
   const goal = await prisma.goal.findFirst({ where: { id, userId } });
-  if (!goal) throw new Error('Meta não encontrada.');
+  if (!goal) {
+    throw new NotFoundError('Meta não encontrada.');
+  }
 
   await prisma.goal.delete({ where: { id } });
 }

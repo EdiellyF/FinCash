@@ -30,8 +30,20 @@ services:
       DATABASE_URL: "postgresql://postgres:123mudar@postgres:5432/fincash?schema=public"
       JWT_SECRET: "change_this_secret"
       FRONTEND_URL: "http://localhost:5173"
+      GROQ_API_KEY: "${GROQ_API_KEY:-}"
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      OLLAMA_API_URL: "${OLLAMA_API_URL:-http://localhost:11434}"
+      OLLAMA_MODEL: "${OLLAMA_MODEL:-llama3.2}"
+      REDIS_URL: "redis://redis:6379"
+      SMTP_HOST: "${SMTP_HOST:-smtp.gmail.com}"
+      SMTP_PORT: "${SMTP_PORT:-587}"
+      SMTP_USER: "${SMTP_USER:-}"
+      SMTP_PASS: "${SMTP_PASS:-}"
+      SMTP_FROM: "${SMTP_FROM:-}"
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     volumes:
       - ./backend:/app
@@ -51,5 +63,20 @@ services:
       - ./frontend:/app
       - /app/node_modules
 
+  redis:
+    image: redis:7-alpine
+    container_name: fincash_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_fincash:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres_fincash:
+  redis_fincash:

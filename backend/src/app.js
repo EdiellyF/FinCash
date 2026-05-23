@@ -3,34 +3,60 @@ import 'express-async-errors';
 import cors from 'cors';
 import express from 'express';
 import { env } from './config/env.js';
+import { logger } from './config/logger.js';
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import categoryRoutes from './routes/categoryRoutes.js';
 import transactionRoutes from './routes/transactionRoutes.js';
+import transactionExtractionRoutes from './routes/transactionExtractionRoutes.js';
 import goalRoutes from './routes/goalRoutes.js';
 import budgetRoutes from './routes/budgetRoutes.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
-import { errorMiddleware } from './middlewares/errorMiddleware.js';
+import statsRoutes from './routes/statsRoutes.js';
+import categorizationRoutes from './routes/categorizationRoutes.js';
+import { errorMiddleware, notFoundHandler } from './middlewares/errorMiddleware.js';
+import swaggerUi from 'swagger-ui-express';
+import { swaggerSpec } from './config/swaggerConfig.js';
 
 const app = express();
 
 app.use(cors({ origin: env.frontendUrl, credentials: true }));
 app.use(express.json());
 
+// Request logging middleware
+app.use((req, res, next) => {
+  logger.info(`${req.method} ${req.path}`, {
+    userId: req.user?.id,
+    ip: req.ip,
+    userAgent: req.get('user-agent')
+  });
+  next();
+});
+
 app.get('/api/health', (req, res) => res.json({ message: 'API online' }));
+
+// Swagger API Documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/transactions', transactionRoutes);
+app.use('/api/transactions', transactionExtractionRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/budgets', budgetRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/stats', statsRoutes);
+app.use('/api/categorization', categorizationRoutes);
 
+// 404 handler for undefined routes
+app.use(notFoundHandler);
+
+// Global error handler
 app.use(errorMiddleware);
 
 export default app;

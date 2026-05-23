@@ -1,4 +1,6 @@
 import { prisma } from '../config/db.js';
+import { NotFoundError, ValidationError } from '../utils/errors.js';
+import { logger } from '../config/logger.js';
 
 async function ensureCategoryOwnership(userId, categoryId) {
   const category = await prisma.category.findFirst({
@@ -8,7 +10,10 @@ async function ensureCategoryOwnership(userId, categoryId) {
     }
   });
 
-  if (!category) throw new Error('Categoria inválida.');
+  if (!category) {
+    logger.warn('Invalid category access attempt', { userId, categoryId });
+    throw new ValidationError('Categoria inválida ou não pertence ao usuário.');
+  }
   return category;
 }
 
@@ -49,6 +54,15 @@ async function calculateBudgetAlert(userId, payload, ignoreTransactionId = null)
   const limit = Number(budget.limitAmount);
 
   if (projected > limit) {
+    logger.warn('Budget limit exceeded', { 
+      userId, 
+      categoryId: payload.categoryId, 
+      category: budget.category.name,
+      limit, 
+      projected,
+      exceededBy: projected - limit 
+    });
+    
     return {
       category: budget.category.name,
       month,
@@ -63,6 +77,10 @@ async function calculateBudgetAlert(userId, payload, ignoreTransactionId = null)
 }
 
 export async function listTransactions(userId, query) {
+  const page = parseInt(query.page) || 1;
+  const limit = parseInt(query.limit) || 50;
+  const skip = (page - 1) * limit;
+
   const where = {
     userId,
     ...(query.type ? { type: query.type } : {}),
@@ -75,11 +93,36 @@ export async function listTransactions(userId, query) {
     } : {})
   };
 
-  return prisma.transaction.findMany({
-    where,
-    include: { category: true },
-    orderBy: { transactionDate: 'desc' }
+  const [transactions, total] = await Promise.all([
+    prisma.transaction.findMany({
+      where,
+      include: { category: true },
+      orderBy: { transactionDate: 'desc' },
+      skip,
+      take: limit
+    }),
+    prisma.transaction.count({ where })
+  ]);
+
+  logger.info('Transactions listed with pagination', { 
+    userId, 
+    page, 
+    limit, 
+    total,
+    returned: transactions.length 
   });
+
+  return {
+    transactions,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      hasNext: page * limit < total,
+      hasPrev: page > 1
+    }
+  };
 }
 
 export async function createTransaction(userId, data) {
@@ -99,12 +142,23 @@ export async function createTransaction(userId, data) {
     include: { category: true }
   });
 
+  logger.info('Transaction created in database', { 
+    userId, 
+    transactionId: transaction.id,
+    type: transaction.type,
+    amount: transaction.amount,
+    budgetAlert: !!budgetAlert 
+  });
+
   return { transaction, budgetAlert };
 }
 
 export async function updateTransaction(userId, id, data) {
   const existing = await prisma.transaction.findFirst({ where: { id, userId } });
-  if (!existing) throw new Error('Transação não encontrada.');
+  if (!existing) {
+    logger.warn('Update attempt for non-existent transaction', { userId, transactionId: id });
+    throw new NotFoundError('Transação não encontrada.');
+  }
 
   await ensureCategoryOwnership(userId, data.categoryId);
   const budgetAlert = await calculateBudgetAlert(userId, data, id);
@@ -122,12 +176,23 @@ export async function updateTransaction(userId, id, data) {
     include: { category: true }
   });
 
+  logger.info('Transaction updated in database', { 
+    userId, 
+    transactionId: id,
+    budgetAlert: !!budgetAlert 
+  });
+
   return { transaction, budgetAlert };
 }
 
 export async function removeTransaction(userId, id) {
   const existing = await prisma.transaction.findFirst({ where: { id, userId } });
-  if (!existing) throw new Error('Transação não encontrada.');
+  if (!existing) {
+    logger.warn('Delete attempt for non-existent transaction', { userId, transactionId: id });
+    throw new NotFoundError('Transação não encontrada.');
+  }
 
   await prisma.transaction.delete({ where: { id } });
+  
+  logger.info('Transaction deleted from database', { userId, transactionId: id });
 }

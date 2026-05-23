@@ -1,4 +1,5 @@
 import { prisma } from '../config/db.js';
+import { NotFoundError } from '../utils/errors.js';
 
 export async function listBudgets(userId) {
   return prisma.budget.findMany({
@@ -34,7 +35,9 @@ export async function createBudget(userId, data) {
 
 export async function updateBudget(userId, id, data) {
   const budget = await prisma.budget.findFirst({ where: { id, userId } });
-  if (!budget) throw new Error('Orçamento não encontrado.');
+  if (!budget) {
+    throw new NotFoundError('Orçamento não encontrado.');
+  }
 
   return prisma.budget.update({
     where: { id },
@@ -50,7 +53,9 @@ export async function updateBudget(userId, id, data) {
 
 export async function removeBudget(userId, id) {
   const budget = await prisma.budget.findFirst({ where: { id, userId } });
-  if (!budget) throw new Error('Orçamento não encontrado.');
+  if (!budget) {
+    throw new NotFoundError('Orçamento não encontrado.');
+  }
 
   await prisma.budget.delete({ where: { id } });
 }

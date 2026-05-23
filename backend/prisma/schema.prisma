@@ -58,6 +58,10 @@ model Category {
   transactions Transaction[]
   budgets      Budget[]
 
+  @@index([userId])
+  @@index([type])
+  @@index([isDefault])
+  @@index([userId, type])
   @@map("categories")
 }
 
@@ -76,6 +80,13 @@ model Transaction {
   user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   category        Category        @relation(fields: [categoryId], references: [id])
 
+  @@index([userId])
+  @@index([categoryId])
+  @@index([transactionDate])
+  @@index([type])
+  @@index([userId, transactionDate])
+  @@index([userId, categoryId])
+  @@index([userId, type, transactionDate])
   @@map("transactions")
 }
 
@@ -91,6 +102,8 @@ model Goal {
 
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+  @@index([deadline])
   @@map("goals")
 }
 
@@ -108,6 +121,9 @@ model Budget {
   category    Category  @relation(fields: [categoryId], references: [id])
 
   @@unique([userId, categoryId, month, year])
+  @@index([userId])
+  @@index([month, year])
+  @@index([userId, month, year])
   @@map("budgets")
 }
 
@@ -120,6 +136,9 @@ model ChatMessage {
 
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+  @@index([createdAt])
+  @@index([userId, createdAt])
   @@map("chat_messages")
 }
 
@@ -132,5 +151,8 @@ model RequestLog {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@unique([userId, date, provider])
+  @@index([date])
+  @@index([userId, date])
+  @@index([provider, date])
   @@map("request_logs")
 }

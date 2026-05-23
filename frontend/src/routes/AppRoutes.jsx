@@ -13,6 +13,7 @@ import Reports from '../pages/Reports';
 import Profile from '../pages/Profile';
 import Education from '../pages/Education';
 import Chat from '../pages/Chat';
+import Stats from '../pages/Stats';
 import VerifyEmail from '../pages/VerifyEmail';
 
 export default function AppRoutes() {
@@ -32,6 +33,7 @@ export default function AppRoutes() {
         <Route path="/reports" element={<PrivateRoute><Reports /></PrivateRoute>} />
         <Route path="/education" element={<PrivateRoute><Education /></PrivateRoute>} />
         <Route path="/chat" element={<PrivateRoute><Chat /></PrivateRoute>} />
+        <Route path="/stats" element={<PrivateRoute><Stats /></PrivateRoute>} />
         <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
         <Route path="/verify-email" element={<VerifyEmail />} />
 
