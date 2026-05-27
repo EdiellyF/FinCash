@@ -6,9 +6,48 @@ import FormModal from '../components/ui/FormModal';
 import { currency, dateBR } from '../utils/format';
 import api from '../services/api';
 import { toast } from 'sonner';
-import { Target, Pencil, Trash2, Plus, Trophy } from 'lucide-react';
+import { Target, Pencil, Trash2, Plus, Trophy, Lightbulb } from 'lucide-react';
 
 const initial = { title: '', targetAmount: '', currentAmount: 0, deadline: '' };
+
+// Sugestões de metas para estudantes
+const STUDENT_GOAL_SUGGESTIONS = [
+  {
+    title: 'Notebook para estudos',
+    targetAmount: 4000,
+    icon: '💻',
+    description: 'Investimento em ferramentas de estudo',
+    range: 'R$ 3.000-5.000',
+  },
+  {
+    title: 'Viagem de formatura',
+    targetAmount: 3000,
+    icon: '✈️',
+    description: 'Celebrar o final da graduação',
+    range: 'R$ 2.000-4.000',
+  },
+  {
+    title: 'Intercâmbio curto prazo',
+    targetAmount: 10000,
+    icon: '🌍',
+    description: 'Experiência acadêmica internacional',
+    range: 'R$ 8.000-15.000',
+  },
+  {
+    title: 'Reserva de emergência',
+    targetAmount: 2400,
+    icon: '🛡️',
+    description: '6 meses de despesas básicas',
+    range: '6 meses de gastos',
+  },
+  {
+    title: 'Cursos complementares',
+    targetAmount: 1000,
+    icon: '📚',
+    description: 'Certificações e qualificação profissional',
+    range: 'R$ 500-2.000',
+  },
+];
 
 function GoalCard({ row, onEdit, onRemove }) {
   const pct = Math.min(100, row.progress ?? 0);
@@ -52,9 +91,33 @@ function GoalCard({ row, onEdit, onRemove }) {
   );
 }
 
+function SuggestionCard({ suggestion, onSelect }) {
+  return (
+    <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+      <div className="mb-2 flex items-start justify-between">
+        <div className="flex items-start gap-3">
+          <span className="text-2xl">{suggestion.icon}</span>
+          <div>
+            <p className="font-semibold text-slate-900 dark:text-white">{suggestion.title}</p>
+            <p className="text-xs text-slate-500">{suggestion.description}</p>
+            <p className="mt-1 text-xs font-semibold text-blue-600 dark:text-blue-400">{suggestion.range}</p>
+          </div>
+        </div>
+      </div>
+      <button
+        onClick={() => onSelect(suggestion)}
+        className="mt-3 w-full rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"
+      >
+        Criar esta meta
+      </button>
+    </div>
+  );
+}
+
 export default function Goals() {
   const [rows, setRows] = useState([]);
   const [open, setOpen] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(true);
   const [editing, setEditing] = useState(null);
   const { register, handleSubmit, reset } = useForm({ defaultValues: initial });
 
@@ -63,6 +126,10 @@ export default function Goals() {
   async function load() {
     const { data } = await api.get('/goals');
     setRows(data.data);
+    // Hide suggestions if user already has goals
+    if (data.data.length > 0) {
+      setShowSuggestions(false);
+    }
   }
 
   function handleNew() { setEditing(null); reset(initial); setOpen(true); }
@@ -70,6 +137,17 @@ export default function Goals() {
   function handleEdit(row) {
     setEditing(row);
     reset({ title: row.title, targetAmount: Number(row.targetAmount), currentAmount: Number(row.currentAmount), deadline: row.deadline ? row.deadline.slice(0, 10) : '' });
+    setOpen(true);
+  }
+
+  function handleSelectSuggestion(suggestion) {
+    reset({
+      title: suggestion.title,
+      targetAmount: suggestion.targetAmount,
+      currentAmount: 0,
+      deadline: '',
+    });
+    setEditing(null);
     setOpen(true);
   }
 
@@ -82,7 +160,9 @@ export default function Goals() {
         await api.post('/goals', values);
         toast.success('Meta criada.');
       }
-      setOpen(false); load();
+      setOpen(false); 
+      setShowSuggestions(false);
+      load();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Erro ao salvar meta.');
     }
@@ -99,6 +179,20 @@ export default function Goals() {
 
   return (
     <AppShell>
+      {/* Sugestões de Metas para Estudantes */}
+      {showSuggestions && rows.length === 0 && (
+        <PageCard title="💡 Sugestões de Metas para Estudantes">
+          <p className="mb-4 text-sm text-slate-600 dark:text-slate-400">
+            Comece com uma destas metas comuns entre estudantes universitários:
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {STUDENT_GOAL_SUGGESTIONS.map((suggestion, idx) => (
+              <SuggestionCard key={idx} suggestion={suggestion} onSelect={handleSelectSuggestion} />
+            ))}
+          </div>
+        </PageCard>
+      )}
+
       <PageCard
         title="Metas financeiras"
         actions={

@@ -6,16 +6,94 @@ import FormModal from '../components/ui/FormModal';
 import { currency } from '../utils/format';
 import api from '../services/api';
 import { toast } from 'sonner';
-import { Wallet, Plus, Pencil, Trash2, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Wallet, Plus, Pencil, Trash2, AlertTriangle, CheckCircle, Zap } from 'lucide-react';
 
 const MONTHS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 const initial = { categoryId: '', month: new Date().getMonth() + 1, year: new Date().getFullYear(), limitAmount: '' };
+
+// Modelos de orçamento para estudantes
+const BUDGET_TEMPLATES = [
+  {
+    name: '💼 Estudante Bolsista',
+    description: 'Para estudantes com bolsa-auxílio (R$ 400-600/mês)',
+    budgets: [
+      { category: 'Alimentação', limit: 150 },
+      { category: 'Transporte para Faculdade', limit: 50 },
+      { category: 'Materiais de Estudo', limit: 50 },
+      { category: 'Lazer', limit: 50 },
+      { category: 'Saúde', limit: 50 },
+    ]
+  },
+  {
+    name: '👷 Estudante Trabalhador',
+    description: 'Para estudantes com renda de trabalho (R$ 1.200-2.000/mês)',
+    budgets: [
+      { category: 'Moradia', limit: 500 },
+      { category: 'Alimentação', limit: 300 },
+      { category: 'Transporte para Faculdade', limit: 100 },
+      { category: 'Materiais de Estudo', limit: 100 },
+      { category: 'Lazer', limit: 100 },
+      { category: 'Saúde', limit: 100 },
+      { category: 'Educação', limit: 100 },
+    ]
+  },
+  {
+    name: '🏠 Estudante em República',
+    description: 'Para estudantes dividindo casa com outros (R$ 800-1.500/mês)',
+    budgets: [
+      { category: 'Alojamento/República', limit: 300 },
+      { category: 'Alimentação', limit: 250 },
+      { category: 'Transporte para Faculdade', limit: 80 },
+      { category: 'Materiais de Estudo', limit: 80 },
+      { category: 'Lazer', limit: 100 },
+      { category: 'Saúde', limit: 50 },
+    ]
+  },
+  {
+    name: '👨‍👩‍👧‍👦 Morando com Familiares',
+    description: 'Para estudantes que moram em casa dos pais (R$ 500-900/mês)',
+    budgets: [
+      { category: 'Transporte para Faculdade', limit: 100 },
+      { category: 'Alimentação', limit: 150 },
+      { category: 'Materiais de Estudo', limit: 100 },
+      { category: 'Lazer', limit: 150 },
+      { category: 'Saúde', limit: 50 },
+      { category: 'Educação', limit: 100 },
+    ]
+  },
+];
+
+function TemplateCard({ template, onApply }) {
+  return (
+    <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+      <div className="mb-3">
+        <p className="font-bold text-slate-900 dark:text-white">{template.name}</p>
+        <p className="text-xs text-slate-500">{template.description}</p>
+      </div>
+      <div className="mb-3 space-y-1">
+        {template.budgets.map((b, idx) => (
+          <p key={idx} className="text-xs text-slate-600 dark:text-slate-400">
+            {b.category}: <span className="font-semibold">{currency(b.limit)}</span>
+          </p>
+        ))}
+      </div>
+      <button
+        onClick={() => onApply(template)}
+        className="w-full rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"
+      >
+        Aplicar este template
+      </button>
+    </div>
+  );
+}
 
 export default function Budgets() {
   const [rows, setRows] = useState([]);
   const [categories, setCategories] = useState([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [templateMode, setTemplateMode] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
   const { register, handleSubmit, reset } = useForm({ defaultValues: initial });
 
   useEffect(() => { load(); loadCategories(); }, []);
@@ -23,18 +101,49 @@ export default function Budgets() {
   async function load() { const { data } = await api.get('/budgets'); setRows(data.data); }
   async function loadCategories() { const { data } = await api.get('/categories'); setCategories(data.data.filter(i => i.type === 'expense')); }
 
-  function handleNew() { setEditing(null); reset(initial); setOpen(true); }
+  function handleNew() { setEditing(null); reset(initial); setTemplateMode(false); setOpen(true); }
+  
+  async function handleApplyTemplate(template) {
+    setSelectedTemplate(template);
+    setTemplateMode(true);
+    setEditing(null);
+    setOpen(true);
+  }
+
   function handleEdit(row) {
     setEditing(row);
+    setTemplateMode(false);
     reset({ categoryId: row.categoryId, month: row.month, year: row.year, limitAmount: Number(row.limitAmount) });
     setOpen(true);
   }
 
   async function onSubmit(values) {
     try {
-      if (editing) { await api.put(`/budgets/${editing.id}`, values); toast.success('Orçamento atualizado.'); }
-      else { await api.post('/budgets', values); toast.success('Orçamento salvo.'); }
-      setOpen(false); load();
+      if (templateMode && selectedTemplate) {
+        // Aplicar template
+        for (const budget of selectedTemplate.budgets) {
+          const category = categories.find(c => c.name === budget.category);
+          if (category) {
+            await api.post('/budgets', {
+              categoryId: category.id,
+              month: values.month,
+              year: values.year,
+              limitAmount: budget.limit,
+            });
+          }
+        }
+        toast.success('Template de orçamento aplicado com sucesso!');
+        setTemplateMode(false);
+        setSelectedTemplate(null);
+      } else if (editing) { 
+        await api.put(`/budgets/${editing.id}`, values); 
+        toast.success('Orçamento atualizado.'); 
+      } else { 
+        await api.post('/budgets', values); 
+        toast.success('Orçamento salvo.'); 
+      }
+      setOpen(false); 
+      load();
     } catch (error) { toast.error(error.response?.data?.message || 'Erro ao salvar orçamento.'); }
   }
 
@@ -46,6 +155,20 @@ export default function Budgets() {
 
   return (
     <AppShell>
+      {/* Templates de Orçamento para Estudantes */}
+      {rows.length === 0 && (
+        <PageCard title="📋 Templates de Orçamento para Estudantes">
+          <p className="mb-4 text-sm text-slate-600 dark:text-slate-400">
+            Escolha um perfil que se adequa à sua situação e aplicaremos um orçamento baseado em padrões comuns de estudantes universitários:
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {BUDGET_TEMPLATES.map((template, idx) => (
+              <TemplateCard key={idx} template={template} onApply={handleApplyTemplate} />
+            ))}
+          </div>
+        </PageCard>
+      )}
+
       <PageCard
         title="Orçamentos mensais"
         actions={
@@ -100,15 +223,44 @@ export default function Budgets() {
         )}
       </PageCard>
 
-      <FormModal open={open} title={editing ? 'Editar orçamento' : 'Novo orçamento'} onClose={() => setOpen(false)}>
+      <FormModal 
+        open={open} 
+        title={
+          templateMode 
+            ? `Aplicar: ${selectedTemplate?.name} - Escolha mês e ano` 
+            : editing 
+            ? 'Editar orçamento' 
+            : 'Novo orçamento'
+        } 
+        onClose={() => {
+          setOpen(false);
+          setTemplateMode(false);
+          setSelectedTemplate(null);
+        }}
+      >
         <form onSubmit={handleSubmit(onSubmit)} className="grid gap-4 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <label className="mb-1 block text-xs font-semibold text-slate-500">Categoria de despesa</label>
-            <select {...register('categoryId')} required>
-              <option value="">Selecione a categoria</option>
-              {categories.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
-            </select>
-          </div>
+          {!templateMode && (
+            <>
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-xs font-semibold text-slate-500">Categoria de despesa</label>
+                <select {...register('categoryId')} required>
+                  <option value="">Selecione a categoria</option>
+                  {categories.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-500">Limite mensal (R$)</label>
+                <input {...register('limitAmount')} type="number" step="0.01" placeholder="0,00" required />
+              </div>
+            </>
+          )}
+          {templateMode && (
+            <div className="sm:col-span-2 rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
+              <p className="text-xs text-slate-600 dark:text-slate-400">
+                Será criado um orçamento para cada categoria do template abaixo para o mês e ano selecionados.
+              </p>
+            </div>
+          )}
           <div>
             <label className="mb-1 block text-xs font-semibold text-slate-500">Mês</label>
             <select {...register('month')}>
@@ -119,12 +271,8 @@ export default function Budgets() {
             <label className="mb-1 block text-xs font-semibold text-slate-500">Ano</label>
             <input {...register('year')} type="number" min="2000" />
           </div>
-          <div className="sm:col-span-2">
-            <label className="mb-1 block text-xs font-semibold text-slate-500">Limite mensal (R$)</label>
-            <input {...register('limitAmount')} type="number" step="0.01" placeholder="0,00" required />
-          </div>
           <button type="submit" className="sm:col-span-2 rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700">
-            Salvar orçamento
+            {templateMode ? 'Aplicar template' : 'Salvar orçamento'}
           </button>
         </form>
       </FormModal>

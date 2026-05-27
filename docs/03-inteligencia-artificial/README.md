@@ -194,23 +194,29 @@ POST /api/categorization/auto/:transactionId
 #### Estrutura de Limites
 
 ```javascript
-// Limites Globais (para todos os usuários)
+// Limite Total por Usuário (somando TODOS os provedores)
+const TOTAL_DAILY_LIMIT_PER_USER = 2; // 2 requisições totais por dia para estudantes
+
+// Limites Globais (para todos os usuários, por provedor)
 const GEMINI_DAILY_LIMIT_GLOBAL = 20;
 const GROQ_DAILY_LIMIT_GLOBAL = 100;
-
-// Limites por Usuário
-const GEMINI_DAILY_LIMIT_PER_USER = 5;
-const GROQ_DAILY_LIMIT_PER_USER = 25;
 ```
+
+#### 🎓 Otimizado para Estudantes
+
+O sistema FinCash foi otimizado especificamente para estudantes universitários de Palmas/TO com o seguinte limite:
+- **2 requisições totais por usuário por dia** (somando todos os provedores: GROQ, Gemini, Ollama)
+- Isto significa que um estudante pode fazer até 2 consultas completas de análise financeira por dia
+- Objetivo: Garantir acesso equitativo e sustentável para toda a comunidade universitária
 
 #### Fluxo de Controle de Limites
 
 ```
 Requisição do Usuário
          ↓
-Verificar Limite por Usuário
+Verificar Limite Total por Usuário (2/dia)
          ↓
-Verificar Limite Global
+Verificar Limite Global por Provedor
          ↓
 Selecionar Provedor Disponível
          ↓
@@ -232,17 +238,25 @@ GET /api/chat/limits
 {
   "success": true,
   "data": {
+    "combined": {
+      "userLimit": 2,
+      "userUsed": 1,
+      "userRemaining": 1,
+      "userPercentage": 50,
+      "nearLimit": false,
+      "limitExceeded": false
+    },
     "gemini": {
-      "used": 2,
-      "limit": 5,
+      "globalLimit": 20,
       "globalUsed": 15,
-      "globalLimit": 20
+      "globalRemaining": 5,
+      "available": true
     },
     "groq": {
-      "used": 10,
-      "limit": 25,
+      "globalLimit": 100,
       "globalUsed": 45,
-      "globalLimit": 100
+      "globalRemaining": 55,
+      "available": true
     }
   }
 }

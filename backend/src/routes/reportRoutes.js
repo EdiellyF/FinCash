@@ -145,7 +145,7 @@ router.get('/category', categorySummary);
  *         name: separator
  *         schema:
  *           type: string
- *         description: CSV separator (default: comma)
+ *         description: "CSV separator (default: comma)"
  *     responses:
  *       200:
  *         description: CSV file
@@ -186,7 +186,7 @@ router.get('/export/csv', exportCsv);
  *         schema:
  *           type: string
  *           enum: [transactions, goals, budgets]
- *         description: Type of report to export (default: transactions)
+ *         description: "Type of report to export (default: transactions)"
  *       - in: query
  *         name: advanced
  *         schema:
@@ -227,7 +227,7 @@ router.get('/export/pdf', exportPdf);
  *         name: separator
  *         schema:
  *           type: string
- *         description: CSV separator (default: comma)
+ *         description: "CSV separator (default: comma)"
  *     responses:
  *       200:
  *         description: CSV file
@@ -274,7 +274,7 @@ router.get('/export/goals-csv', exportGoalsCsv);
  *         name: separator
  *         schema:
  *           type: string
- *         description: CSV separator (default: comma)
+ *         description: "CSV separator (default: comma)"
  *     responses:
  *       200:
  *         description: CSV file
