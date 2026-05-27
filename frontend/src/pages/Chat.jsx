@@ -117,6 +117,8 @@ export default function Chat() {
   const [isStreaming, setIsStreaming] = useState(false);
   const messagesEndRef = useRef(null);
   const socketRef = useRef(null);
+  const streamingMessageRef = useRef('');
+  const tempMessageIdRef = useRef(null);
 
   // Conectar ao WebSocket ao montar
   useEffect(() => {
@@ -129,9 +131,19 @@ export default function Chat() {
 
     socket.on('chat:chunk', ({ chunk, done }) => {
       if (done) {
+        const finalMessage = streamingMessageRef.current;
+        setMessages(prevMessages => prevMessages.map(msg => {
+          if (msg.id === tempMessageIdRef.current) {
+            return { ...msg, content: finalMessage, isStreaming: false };
+          }
+          return msg;
+        }));
+        streamingMessageRef.current = '';
         setIsStreaming(false);
         setStreamingMessage('');
+        tempMessageIdRef.current = null;
       } else {
+        streamingMessageRef.current += chunk;
         setStreamingMessage(prev => prev + chunk);
       }
     });
@@ -203,9 +215,11 @@ export default function Chat() {
       if (socketRef.current?.connected) {
         setIsStreaming(true);
         setStreamingMessage('');
+        streamingMessageRef.current = '';
         
         // Criar mensagem temporária para streaming
         const tempMessageId = Date.now();
+        tempMessageIdRef.current = tempMessageId;
         setMessages(prev => [...prev, { 
           role: 'assistant', 
           content: '', 
@@ -244,14 +258,16 @@ export default function Chat() {
     } catch (error) {
       console.error('Erro ao enviar mensagem:', error);
       toast.error('Erro ao gerar análise. Tente novamente.');
-      setMessages(prev => prev.slice(0, -1));
+      setMessages(prev => prev.filter(msg => msg.id !== tempMessageIdRef.current));
     } finally {
       setLoading(false);
+      tempMessageIdRef.current = null;
+      streamingMessageRef.current = '';
     }
   };
 
   const handleAnalysisClick = (analysisType) => {
-    if (limits && limits.userRemaining <= 0) {
+    if (limits && limits.combined?.userRemaining <= 0) {
       toast.error('Você atingiu seu limite diário de 2 análises. Tente novamente amanhã.');
       return;
     }
@@ -392,24 +408,24 @@ export default function Chat() {
               </div>
               <div className="flex items-center gap-4 text-sm">
                 <div className="text-gray-600 dark:text-gray-400">
-                  <span className="font-semibold text-gray-900 dark:text-white">{limits.groq?.userUsed || 0}</span>/{limits.groq?.userLimit || 25} hoje
+                  <span className="font-semibold text-gray-900 dark:text-white">{limits.combined?.userUsed || 0}</span>/{limits.combined?.userLimit || 2} hoje
                 </div>
                 {/* Barra de progresso */}
                 <div className="flex items-center gap-2">
                   <div className="h-2 w-24 rounded-full bg-gray-300 dark:bg-gray-600">
                     <div
                       className="h-2 rounded-full bg-emerald-500 transition-all"
-                      style={{ width: `${limits.groq?.userPercentage || 0}%` }}
+                      style={{ width: `${limits.combined?.userPercentage || 0}%` }}
                     />
                   </div>
                   <span className="text-xs text-gray-500 dark:text-gray-400">
-                    {Math.round(limits.groq?.userPercentage || 0)}%
+                    {Math.round(limits.combined?.userPercentage || 0)}%
                   </span>
                 </div>
               </div>
             </div>
             {/* Aviso de limite próximo */}
-            {limits.groq?.nearLimit && limits.groq?.userRemaining > 0 && (
+            {limits.combined?.nearLimit && limits.combined?.userRemaining > 0 && (
               <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/20">
                 <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
                   <AlertCircle size={18} />
@@ -418,12 +434,12 @@ export default function Chat() {
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                  Você tem apenas {limits.groq?.userRemaining || 0} análise(ões) restante(s) hoje.
+                  Você tem apenas {limits.combined?.userRemaining || 0} análise(ões) restante(s) hoje.
                 </p>
               </div>
             )}
             {/* Aviso de limite atingido */}
-            {limits.groq?.userRemaining <= 0 && (
+            {limits.combined?.userRemaining <= 0 && (
               <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-900/20">
                 <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
                   <AlertCircle size={18} />
@@ -432,7 +448,7 @@ export default function Chat() {
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-red-600 dark:text-red-400">
-                  Você já fez {limits.groq?.userLimit || 25} análises hoje. Você pode visualizar o histórico, mas não poderá fazer novas análises até amanhã.
+                  Você já fez {limits.combined?.userLimit || 2} análises hoje. Você pode visualizar o histórico, mas não poderá fazer novas análises até amanhã.
                 </p>
               </div>
             )}
@@ -458,7 +474,7 @@ export default function Chat() {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {ANALYSIS_TYPES.map((type) => {
                     const Icon = type.icon;
-                    const disabled = limits && limits.userRemaining <= 0;
+                    const disabled = limits && limits.combined?.userRemaining <= 0;
                     return (
                       <button
                         key={type.id}
@@ -573,15 +589,15 @@ export default function Chat() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={limits?.userRemaining <= 0 
+              placeholder={limits?.combined?.userRemaining <= 0 
                 ? "Limite de análises atingido. Você pode fazer perguntas sobre análises anteriores."
                 : "Faça uma pergunta sobre sua análise..."}
-              disabled={loading || limits?.userRemaining <= 0}
+              disabled={loading || limits?.combined?.userRemaining <= 0}
               className="flex-1 rounded-xl border border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-400 dark:focus:border-emerald-400"
             />
             <button
               type="submit"
-              disabled={loading || !input.trim() || limits?.userRemaining <= 0}
+              disabled={loading || !input.trim() || limits?.combined?.userRemaining <= 0}
               className="flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-3 font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-emerald-500 dark:hover:bg-emerald-600"
             >
               {loading ? (

@@ -1,7 +1,7 @@
 import AppShell from '../components/layout/AppShell';
 import PageCard from '../components/ui/PageCard';
 import { useState } from 'react';
-import { Shield, TrendingUp, Building2, Calculator, ChevronDown, ChevronUp, BookOpen, Target, Info } from 'lucide-react';
+import { Shield, TrendingUp, Building2, Calculator, ChevronDown, ChevronUp, BookOpen, Target, Info, Lightbulb, MapPin, Utensils, Bus, Zap } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
 /* Simulator Components                                                  */
@@ -217,6 +217,87 @@ export default function Education() {
           ))}
         </div>
       </div>
+
+      {/* Dicas para Estudantes */}
+      <ModuleCard icon={Lightbulb} title="💡 Dicas de Economia para Estudantes Universitários" color="blue">
+        <p className="text-sm text-slate-700 dark:text-slate-300">
+          Como estudante universitário, você tem gastos específicos que podem ser otimizados. Aqui estão dicas práticas para economizar dinheiro enquanto estuda:
+        </p>
+
+        <div className="space-y-3">
+          <div>
+            <h4 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+              <Utensils size={16} className="text-orange-600" /> Alimentação
+            </h4>
+            <ul className="space-y-1 text-sm text-slate-600 dark:text-slate-400">
+              <li>✓ Use o restaurante universitário (R$ 2-5 por refeição vs. R$ 30-50 em restaurantes)</li>
+              <li>✓ Compre alimentos em grupos para aproveitar descontos no atacado</li>
+              <li>✓ Prepare marmitas para os dias de aula — economiza até 60% vs. comprar pronto</li>
+              <li>✓ Evite delivery (cobra 20-30% de taxa) — pida comida com amigos ou compre no local</li>
+              <li>✓ Procure por promoções de frutas e verduras de época no mercado</li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+              <Bus size={16} className="text-yellow-600" /> Transporte
+            </h4>
+            <ul className="space-y-1 text-sm text-slate-600 dark:text-slate-400">
+              <li>✓ Utilize o passe estudantil — pode gerar 40-50% de desconto</li>
+              <li>✓ Faça caronas com outros estudantes ou use aplicativos de carona compartilhada</li>
+              <li>✓ Prefira andar ou bicicleta para distâncias curtas (economia + saúde)</li>
+              <li>✓ Compre passagens com antecedência para viagens (geralmente R$ 50-80 mais barato)</li>
+              <li>✓ Estude na universidade em vez de ir para casa — economiza combustível/passagem</li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+              <BookOpen size={16} className="text-blue-600" /> Materiais de Estudo
+            </h4>
+            <ul className="space-y-1 text-sm text-slate-600 dark:text-slate-400">
+              <li>✓ Compre livros usados em grupos de Facebook ou OLX (até 70% de desconto)</li>
+              <li>✓ Use a biblioteca da universidade — é grátis e tem acervo considerável</li>
+              <li>✓ Compartilhe materiais com colegas de curso e faça grupos de estudo</li>
+              <li>✓ Procure PDFs legais de livros abertos e repositórios universitários</li>
+              <li>✓ Negocie cadernos, canetas e materiais em grupo — muitas lojas dão desconto</li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+              <Zap size={16} className="text-purple-600" /> Descontos Estudantis
+            </h4>
+            <ul className="space-y-1 text-sm text-slate-600 dark:text-slate-400">
+              <li>✓ Cinema e teatro — apresente carteirinha estudantil para 50% de desconto</li>
+              <li>✓ Livros — muitas editoras dão 10-15% para estudantes com carteira</li>
+              <li>✓ Museus, parques e eventos — pesquise descontos estudantis com antecedência</li>
+              <li>✓ Software — Adobe, Microsoft Office, JetBrains oferecem planos grátis para estudantes</li>
+              <li>✓ Telefonia e internet — procure planos especiais para universitários</li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+              <MapPin size={16} className="text-red-600" /> Palmas, Tocantins — Dicas Locais
+            </h4>
+            <ul className="space-y-1 text-sm text-slate-600 dark:text-slate-400">
+              <li>✓ <strong>IFTO/UFT:</strong> Restaurantes nas universidades oferecem as refeições mais baratas</li>
+              <li>✓ <strong>Transporte:</strong> O passe estudantil em Palmas funciona em ônibus urbanos (R$ 4,50 → desconto)</li>
+              <li>✓ <strong>República:</strong> Compartilhar casa com outros estudantes reduz aluguel em 40-60%</li>
+              <li>✓ <strong>Shopping:</strong> Procure por cinemas com meia-entrada para estudantes</li>
+              <li>✓ <strong>Mercados:</strong> Palmas tem algumas feiras de agricultores com preços 20-30% menores</li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="rounded-xl bg-blue-50 p-4 dark:bg-blue-900/20">
+          <p className="text-xs font-bold text-blue-800 dark:text-blue-300">💰 Meta: Economizar R$ 300-500/mês com essas dicas</p>
+          <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">
+            Se você aplicar apenas metade dessas recomendações, é possível economizar R$ 150-300 mensais. Em 12 meses, isso pode render R$ 1.800 a R$ 3.600 — o suficiente para um notebook para estudos, um intercâmbio curto ou uma reserva de emergência!
+          </p>
+        </div>
+      </ModuleCard>
 
       {/* Module 1: Emergency Reserve */}
       <ModuleCard icon={Shield} title="Módulo 1 — Reserva de Emergência" color="emerald">

@@ -17,11 +17,10 @@ const groqClient = env.groqApiKey ? new Groq({ apiKey: env.groqApiKey }) : null;
 const OLLAMA_API_URL = env.ollamaApiUrl || 'http://localhost:11434';
 const OLLAMA_MODEL = env.ollamaModel || 'llama3.2';
 
-// Limites de requisições (otimizados para estudantes)
+// Limites de requisições (2 total por usuário por dia, somando todos os provedores - otimizado para estudantes)
+const TOTAL_DAILY_LIMIT_PER_USER = 2; // 2 requisições totais por dia para TODOS os provedores
 const GEMINI_DAILY_LIMIT_GLOBAL = 20;
-const GEMINI_DAILY_LIMIT_PER_USER = 5; // Aumentado de 2 para 5 para estudantes
 const GROQ_DAILY_LIMIT_GLOBAL = 100;
-const GROQ_DAILY_LIMIT_PER_USER = 25; // Aumentado de 20 para 25 para estudantes
 
 // Modelos disponíveis
 const MODELS = {
@@ -200,17 +199,37 @@ async function checkUserLimit(userId, provider) {
 }
 
 /**
+ * Verifica limite TOTAL de requisições do usuário (somando todos os provedores)
+ */
+async function checkTotalUserRequestCount(userId) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const logs = await prisma.requestLog.findMany({
+    where: {
+      userId,
+      date: today,
+      provider: {
+        in: ['gemini', 'groq', 'ollama'],
+      },
+    },
+  });
+
+  return logs.reduce((total, log) => total + log.count, 0);
+}
+
+/**
  * Obtém os limites configurados para cada provedor
  */
 function getProviderLimits(provider) {
   const limits = {
     gemini: {
       global: GEMINI_DAILY_LIMIT_GLOBAL,
-      perUser: GEMINI_DAILY_LIMIT_PER_USER,
+      perUser: TOTAL_DAILY_LIMIT_PER_USER, // Usa limite total por usuário
     },
     groq: {
       global: GROQ_DAILY_LIMIT_GLOBAL,
-      perUser: GROQ_DAILY_LIMIT_PER_USER,
+      perUser: TOTAL_DAILY_LIMIT_PER_USER, // Usa limite total por usuário
     },
   };
   return limits[provider] || { global: Infinity, perUser: Infinity };
@@ -226,11 +245,11 @@ async function isProviderAvailable(provider, userId) {
 
   const limits = getProviderLimits(provider);
   const globalCount = await checkGlobalLimit(provider);
-  const userCount = await checkUserLimit(userId, provider);
+  const totalUserCount = await checkTotalUserRequestCount(userId);
 
   return (
     globalCount < limits.global &&
-    userCount < limits.perUser
+    totalUserCount < limits.perUser
   );
 }
 
@@ -519,40 +538,43 @@ Considere o contexto financeiro fornecido para dar dicas específicas.`;
 }
 
 /**
- * Retorna os limites atuais do usuário para todos os provedores
+ * Retorna os limites atuais do usuário (2 requisições totais por dia, somando todos os provedores)
  */
 export async function getUserLimits(userId) {
   const geminiGlobalCount = await checkGlobalLimit('gemini');
   const geminiUserCount = await checkUserLimit(userId, 'gemini');
   const groqGlobalCount = await checkGlobalLimit('groq');
   const groqUserCount = await checkUserLimit(userId, 'groq');
+  const totalUserCount = await checkTotalUserRequestCount(userId);
 
-  // Calcular porcentagem de uso e detectar limite próximo
-  const geminiUserPercentage = (geminiUserCount / GEMINI_DAILY_LIMIT_PER_USER) * 100;
-  const groqUserPercentage = (groqUserCount / GROQ_DAILY_LIMIT_PER_USER) * 100;
+  // Calcular porcentagem de uso do TOTAL
+  const totalUserPercentage = (totalUserCount / TOTAL_DAILY_LIMIT_PER_USER) * 100;
 
   return {
+    combined: {
+      globalLimit: 'ilimitado por provedor',
+      userLimit: TOTAL_DAILY_LIMIT_PER_USER,
+      userUsed: totalUserCount,
+      userRemaining: Math.max(0, TOTAL_DAILY_LIMIT_PER_USER - totalUserCount),
+      userPercentage: Math.min(100, totalUserPercentage),
+      nearLimit: totalUserCount >= TOTAL_DAILY_LIMIT_PER_USER - 1,
+      limitExceeded: totalUserCount >= TOTAL_DAILY_LIMIT_PER_USER,
+    },
     gemini: {
       globalLimit: GEMINI_DAILY_LIMIT_GLOBAL,
       globalUsed: geminiGlobalCount,
       globalRemaining: Math.max(0, GEMINI_DAILY_LIMIT_GLOBAL - geminiGlobalCount),
-      userLimit: GEMINI_DAILY_LIMIT_PER_USER,
       userUsed: geminiUserCount,
-      userRemaining: Math.max(0, GEMINI_DAILY_LIMIT_PER_USER - geminiUserCount),
-      userPercentage: Math.min(100, geminiUserPercentage),
-      nearLimit: geminiUserCount >= GEMINI_DAILY_LIMIT_PER_USER - 1,
-      available: genAI && geminiGlobalCount < GEMINI_DAILY_LIMIT_GLOBAL && geminiUserCount < GEMINI_DAILY_LIMIT_PER_USER,
+      userPercentage: Math.min(100, geminiUserCount > 0 ? 100 : 0),
+      available: genAI && geminiGlobalCount < GEMINI_DAILY_LIMIT_GLOBAL,
     },
     groq: {
       globalLimit: GROQ_DAILY_LIMIT_GLOBAL,
       globalUsed: groqGlobalCount,
       globalRemaining: Math.max(0, GROQ_DAILY_LIMIT_GLOBAL - groqGlobalCount),
-      userLimit: GROQ_DAILY_LIMIT_PER_USER,
       userUsed: groqUserCount,
-      userRemaining: Math.max(0, GROQ_DAILY_LIMIT_PER_USER - groqUserCount),
-      userPercentage: Math.min(100, groqUserPercentage),
-      nearLimit: groqUserCount >= GROQ_DAILY_LIMIT_PER_USER - 1,
-      available: groqClient && groqGlobalCount < GROQ_DAILY_LIMIT_GLOBAL && groqUserCount < GROQ_DAILY_LIMIT_PER_USER,
+      userPercentage: Math.min(100, groqUserCount > 0 ? 100 : 0),
+      available: groqClient && groqGlobalCount < GROQ_DAILY_LIMIT_GLOBAL,
     },
   };
 }
