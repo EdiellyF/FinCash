@@ -1,18 +1,10 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
-export const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT),
-  secure: false,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS
-  }
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function sendOTP(email, otp) {
-  await transporter.sendMail({
-    from: process.env.SMTP_FROM,
+  await resend.emails.send({
+    from: 'FinCash <onboarding@resend.dev>',
     to: email,
     subject: 'Código de confirmação',
     html: `
