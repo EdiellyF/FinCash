@@ -6,6 +6,7 @@ const defaults = [
   { name: 'Salário', type: 'income', isDefault: true, color: '#22c55e', icon: 'wallet' },
   { name: 'Freelance', type: 'income', isDefault: true, color: '#16a34a', icon: 'briefcase' },
   { name: 'Investimentos', type: 'income', isDefault: true, color: '#0ea5e9', icon: 'trending-up' },
+  { name: 'Renda Variável', type: 'income', isDefault: true, color: '#14b8a6', icon: 'bar-chart-2' },
   { name: 'Bolsa-auxílio', type: 'income', isDefault: true, color: '#84cc16', icon: 'gift' },
   { name: 'Estágio', type: 'income', isDefault: true, color: '#06b6d4', icon: 'briefcase' },
   { name: 'Freela acadêmico', type: 'income', isDefault: true, color: '#f59e0b', icon: 'pen-tool' },

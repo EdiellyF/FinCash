@@ -2,8 +2,9 @@ import { PrismaClient } from '@prisma/client';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import Groq from 'groq-sdk';
 import { env } from '../config/env.js';
-import { generateCacheKey, getCachedResponse, setCachedResponse } from '../config/redisClient.js';
 import crypto from 'crypto';
+
+
 
 const prisma = new PrismaClient();
 
@@ -584,16 +585,12 @@ export async function getUserLimits(userId) {
  */
 export async function generateFinancialAdvice(userId, userMessage, conversationHistory = [], period = '30d') {
   try {
-    // Gerar hash da mensagem para cache
-    const messageHash = crypto.createHash('md5').update(userMessage + period).digest('hex');
-    const cacheKey = generateCacheKey(userId, messageHash, period);
+    
+    
+    
 
-    // Tentar obter do cache
-    const cachedResponse = await getCachedResponse(cacheKey);
-    if (cachedResponse) {
-      console.log(`[FinCash AI] Resposta recuperada do cache para ${period}`);
-      return cachedResponse;
-    }
+    
+  
 
     const context = await getFinancialContext(userId, period);
 
@@ -639,7 +636,7 @@ ${context.recentTransactions.map(t => `- ${t.type === 'income' ? 'Receita' : 'De
 
     // Salvar no cache (1 hora para respostas comuns, 24h para análises completas)
     const ttl = userMessage.includes('análise completa') || userMessage.includes('visão geral') ? 86400 : 3600;
-    await setCachedResponse(cacheKey, response, ttl);
+    
 
     // Incrementar contador por usuário
     await checkAndIncrementRequestCount(userId, provider);

@@ -7,8 +7,14 @@ export const env = {
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
   geminiApiKey: process.env.GEMINI_API_KEY,
   groqApiKey: process.env.GROQ_API_KEY,
+  resendApiKey: process.env.RESEND_API_KEY,
+  smtpHost: process.env.SMTP_HOST,
+  smtpPort: Number(process.env.SMTP_PORT || 587),
+  smtpUser: process.env.SMTP_USER,
+  smtpPass: process.env.SMTP_PASS,
+  smtpFrom: process.env.SMTP_FROM,
   ollamaApiUrl: process.env.OLLAMA_API_URL || 'http://localhost:11434',
   ollamaModel: process.env.OLLAMA_MODEL || 'llama3.2',
-  redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
+  
   nodeEnv: process.env.NODE_ENV || 'development'
 };

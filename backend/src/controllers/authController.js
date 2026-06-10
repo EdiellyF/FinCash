@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import { sendOTP } from '../services/emailService.js';
 import { ValidationError, NotFoundError, ConflictError } from '../utils/errors.js';
 import { logger } from '../config/logger.js';
+import { env } from '../config/env.js';
 
 const prisma = new PrismaClient();
 
@@ -45,11 +46,15 @@ export async function requestRegister(req, res) {
 
   logger.info('Registration request with OTP', { email });
 
-  if (!email.includes('@')) {
+  if (!name || name.trim().length < 3) {
+    throw new ValidationError('Nome deve ter pelo menos 3 caracteres');
+  }
+
+  if (!email || !email.includes('@')) {
     throw new ValidationError('Email inválido');
   }
 
-  if (password.length < 6) {
+  if (!password || password.length < 6) {
     throw new ValidationError('Senha deve ter pelo menos 6 caracteres');
   }
 
@@ -88,9 +93,19 @@ export async function requestRegister(req, res) {
     }
   });
 
-  await sendOTP(email, otp);
+  logger.info('Pending user created/updated', { email, otpExpiresAt });
 
-  logger.info('OTP sent successfully', { email });
+  try {
+    await sendOTP(email, otp);
+    logger.info('OTP sent successfully', { email });
+  } catch (emailError) {
+    logger.error('Failed to send OTP', { email, error: emailError.message });
+    if (env.nodeEnv === 'development') {
+      logger.warn('Development mode: OTP for testing', { email, otp });
+    } else {
+      throw emailError;
+    }
+  }
 
   return created(res, { email }, 'OTP enviado');
 }
@@ -164,9 +179,19 @@ export async function resendOTP(req, res) {
     }
   });
 
-  await sendOTP(email, otp);
+  logger.info('Pending user updated with new OTP', { email, otpExpiresAt });
 
-  logger.info('New OTP sent successfully', { email });
+  try {
+    await sendOTP(email, otp);
+    logger.info('New OTP sent successfully', { email });
+  } catch (emailError) {
+    logger.error('Failed to resend OTP', { email, error: emailError.message });
+    if (env.nodeEnv === 'development') {
+      logger.warn('Development mode: OTP for testing', { email, otp });
+    } else {
+      throw emailError;
+    }
+  }
 
   return ok(res, null, 'Novo código enviado');
 }

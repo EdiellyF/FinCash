@@ -1,11 +1,26 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
 import { 
   extractTransactions, 
-  extractAndSaveTransactions 
+  extractTransactionsPDF,
+  extractAndSaveTransactions,
+  saveTransactions
 } from '../controllers/transactionExtractionController.js';
 
 const router = Router();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype !== 'application/pdf') {
+      cb(new Error('Envie um arquivo PDF valido.'));
+      return;
+    }
+
+    cb(null, true);
+  }
+});
 router.use(authMiddleware);
 
 /**
@@ -63,6 +78,8 @@ router.use(authMiddleware);
  *                       type: number
  */
 router.post('/extract', extractTransactions);
+router.post('/extract-pdf', upload.single('file'), extractTransactionsPDF);
+router.post('/extract-save', saveTransactions);
 
 /**
  * @swagger
