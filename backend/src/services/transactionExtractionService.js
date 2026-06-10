@@ -1,4 +1,5 @@
 import { prisma } from '../config/db.js';
+import pdfParse from 'pdf-parse';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import Groq from 'groq-sdk';
 import { env } from '../config/env.js';
@@ -26,6 +27,8 @@ const MODELS = {
  * Exemplo: "meu salário é 1800, gastei 300 com alimentação, 150 com transporte"
  */
 export async function extractTransactionsFromText(userId, text, options = {}) {
+  const { isBankStatement = false } = options;
+
   try {
     logger.info('Transaction extraction requested', { userId, textLength: text.length });
 
@@ -46,7 +49,7 @@ export async function extractTransactionsFromText(userId, text, options = {}) {
     }));
 
     // Criar prompt para extração
-    const prompt = buildExtractionPrompt(text, categoryContext);
+    const prompt = buildExtractionPrompt(text, categoryContext, isBankStatement);
 
     // Selecionar melhor provedor e gerar resposta
     const provider = await selectBestProvider(userId);
@@ -76,6 +79,79 @@ export async function extractTransactionsFromText(userId, text, options = {}) {
 /**
  * Salva transações extraídas no banco de dados
  */
+/**
+ * Extrai transacoes de extratos bancarios ou faturas em PDF.
+ * Primeiro tenta texto com pdf-parse; se o PDF parecer escaneado, usa Gemini com inlineData.
+ */
+export async function extractTransactionsFromPDF(userId, pdfBuffer, options = {}) {
+  try {
+    logger.info('PDF transaction extraction requested', { userId, fileSize: pdfBuffer.length });
+
+    const categories = await prisma.category.findMany({
+      where: {
+        OR: [{ userId }, { isDefault: true }],
+      },
+      orderBy: { name: 'asc' }
+    });
+
+    const categoryContext = categories.map(cat => ({
+      id: cat.id,
+      name: cat.name,
+      type: cat.type,
+      isDefault: cat.isDefault
+    }));
+
+    let extractedText = '';
+    try {
+      const parsedPdf = await pdfParse(pdfBuffer);
+      extractedText = parsedPdf.text?.trim() || '';
+    } catch (error) {
+      logger.warn('Could not parse PDF text, falling back to Gemini inline PDF', {
+        userId,
+        error: error.message
+      });
+    }
+
+    const hasReadableText = extractedText.length >= (options.minTextLength || 80);
+
+    let provider;
+    let extractedData;
+
+    if (hasReadableText) {
+      const prompt = buildExtractionPrompt(extractedText, categoryContext, true);
+      provider = await selectBestProvider(userId);
+      extractedData = await generateWithProvider(provider, prompt);
+    } else {
+      if (!genAI) {
+        throw new Error('O PDF parece ser escaneado ou imagem. Configure o Gemini para analisar PDFs sem texto legivel.');
+      }
+
+      const prompt = buildExtractionPrompt('', categoryContext, true);
+      provider = 'gemini-vision';
+      extractedData = await generateWithGeminiPDF(pdfBuffer.toString('base64'), prompt);
+    }
+
+    const transactions = processExtractedData(extractedData, categories);
+
+    logger.info('PDF transactions extracted successfully', {
+      userId,
+      extractedCount: transactions.length,
+      provider,
+      textLength: extractedText.length
+    });
+
+    return {
+      transactions,
+      provider,
+      confidence: calculateConfidence(transactions),
+      source: hasReadableText ? 'pdf-text' : 'pdf-vision'
+    };
+  } catch (error) {
+    logger.error('Error in PDF transaction extraction', { error: error.message, userId });
+    throw error;
+  }
+}
+
 export async function saveExtractedTransactions(userId, transactions, options = {}) {
   const { autoSave = false, transactionDate = new Date() } = options;
 
@@ -106,7 +182,7 @@ export async function saveExtractedTransactions(userId, transactions, options = 
             title: tx.title || tx.description,
             description: tx.description,
             amount: tx.amount,
-            transactionDate: new Date(transactionDate)
+            transactionDate: tx.transactionDate ? new Date(tx.transactionDate) : new Date(transactionDate)
           }
         });
 
@@ -140,24 +216,41 @@ export async function saveExtractedTransactions(userId, transactions, options = 
 /**
  * Constrói o prompt para extração de transações
  */
-function buildExtractionPrompt(text, categories) {
+function buildExtractionPrompt(text, categories, isBankStatement = false) {
   const categoryList = categories
     .map(cat => `- ${cat.name} (${cat.type === 'income' ? 'Receita' : 'Despesa'})`)
     .join('\n');
 
-  return `Você é um especialista em extração de informações financeiras. Sua tarefa é extrair transações financeiras de texto livre.
+  const contextInstruction = isBankStatement
+    ? 'Voce esta processando um PDF de extrato bancario ou fatura de cartao de credito. O conteudo pode ter ruido: saldos, totais, cabecalhos, rodapes, dados de agencia/conta e avisos legais.'
+    : 'Voce esta processando texto livre digitado pelo usuario.';
+
+  const bankRules = isBankStatement ? `
+REGRAS ESPECIFICAS PARA EXTRATOS E FATURAS:
+1. IGNORE COMPLETAMENTE saldos, totais, limites, cabecalhos do banco, dados de agencia/conta, numero do cartao, avisos legais, rodapes e PAGAMENTOS DE FATURA.
+2. Extraia APENAS linhas que representem transacoes reais de consumo.
+3. Em extratos bancarios: "C", "Credito", "Cred" ou entrada positiva = income; "D", "Debito", "Deb", saque, pagamento, tarifa, pix enviado e compra = expense.
+4. Em faturas de cartao: APENAS compras = expense. IGNORE pagamentos de fatura, estornos, ajustes de credito e cashback.
+5. Valores podem vir no formato brasileiro, como "1.234,56" ou "1234,56". Converta SEMPRE para numero JSON em formato americano, como 1234.56.
+6. Extraia a data da transacao. Se vier como DD/MM, DD-MM ou "07 MAI", use o ano indicado no extrato/fatura. Se nao houver ano confiavel, use null.
+7. Limpe o estabelecimento no title. Exemplo: "*STON*       IFOOD" vira title "Ifood" e description "*STON*".
+` : '';
+
+  return `Voce e um especialista em extracao de informacoes financeiras.
+${contextInstruction}
 
 CATEGORIAS DISPONÍVEIS:
 ${categoryList}
 
-REGRAS DE EXTRAÇÃO:
-1. Extraia TODAS as transações mencionadas no texto
-2. Identifique se é RECEITA (income) ou DESPESA (expense)
-3. Atribua a categoria mais apropriada da lista
-4. Extraia o valor numérico (considere R$, reais, ou apenas números)
-5. Crie um título descritivo para cada transação
-6. Se a data não for especificada, use a data atual
-7. Retorne APENAS JSON válido, sem texto adicional
+REGRAS GERAIS DE EXTRACAO:
+1. Extraia TODAS as transacoes financeiras reais mencionadas.
+2. Identifique se é RECEITA (income) ou DESPESA (expense).
+3. Atribua a categoria mais apropriada da lista.
+4. Extraia o valor numerico exato.
+5. O 'title' DEVE SER O NOME DO ESTABELECIMENTO ou origem da transacao contido no texto. Nao invente nomes genericos.
+6. Use a 'description' para dados adicionais do texto, como parcela, codigo, forma de pagamento ou trecho original relevante.
+${bankRules}
+7. Retorne APENAS JSON valido, sem texto adicional e sem markdown.
 
 FORMATO DE RESPOSTA (JSON):
 {
@@ -166,14 +259,15 @@ FORMATO DE RESPOSTA (JSON):
       "type": "income|expense",
       "amount": number,
       "category": "nome exato da categoria",
-      "title": "título descritivo",
-      "description": "descrição detalhada ou contexto"
+      "title": "nome do estabelecimento da transação (ex: Shopee, Drogasil)",
+      "description": "dados adicionais contidos na linha (ex: 07 MAI, Parcela 3/3)",
+      "transactionDate": "YYYY-MM-DD ou null"
     }
   ]
 }
 
 TEXTO PARA ANALISAR:
-${text}
+${text || 'O conteudo esta no arquivo PDF anexado.'}
 
 Responda APENAS com o JSON, sem markdown ou texto adicional:`;
 }
@@ -210,6 +304,21 @@ async function generateWithGemini(prompt) {
   return parseJsonResponse(text);
 }
 
+async function generateWithGeminiPDF(pdfBase64, prompt) {
+  const model = genAI.getGenerativeModel({ model: MODELS.gemini });
+  const result = await model.generateContent([
+    prompt,
+    {
+      inlineData: {
+        data: pdfBase64,
+        mimeType: 'application/pdf'
+      }
+    }
+  ]);
+
+  return parseJsonResponse(result.response.text());
+}
+
 /**
  * Gera com GROQ
  */
@@ -221,7 +330,7 @@ async function generateWithGroq(prompt) {
       { role: 'user', content: prompt }
     ],
     temperature: 0.3,
-    max_tokens: 1000
+    max_tokens: 4000
   });
 
   const text = response.choices[0].message.content;
@@ -278,12 +387,14 @@ function processExtractedData(data, categories) {
     const type = tx.type === 'income' ? 'income' : 'expense';
     
     // Validar valor
-    const amount = parseFloat(tx.amount) || 0;
+    const amount = Number.parseFloat(tx.amount) || 0;
     
     // Validar categoria
     const validCategory = categories.find(cat => 
       cat.name.toLowerCase() === tx.category?.toLowerCase()
     );
+
+    const transactionDate = parseTransactionDate(tx.transactionDate);
 
     return {
       type,
@@ -291,9 +402,19 @@ function processExtractedData(data, categories) {
       category: validCategory ? validCategory.name : tx.category || 'Outros',
       categoryId: validCategory ? validCategory.id : null,
       title: tx.title || tx.description || 'Transação',
-      description: tx.description || ''
+      description: tx.description || '',
+      transactionDate
     };
   }).filter(tx => tx.amount > 0); // Remover transações com valor inválido
+}
+
+function parseTransactionDate(value) {
+  if (!value) return null;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return date.toISOString().slice(0, 10);
 }
 
 /**
