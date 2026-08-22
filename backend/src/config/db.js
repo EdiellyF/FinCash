@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { env } from './env.js';
+import { logger } from './logger.js';
 
 // Configure Prisma Client with connection pooling and performance optimizations
 export const prisma = new PrismaClient({
@@ -11,17 +12,17 @@ export const prisma = new PrismaClient({
   }
 });
 
-// Graceful shutdown
+
 process.on('beforeExit', async () => {
   await prisma.$disconnect();
 });
 
-// Handle connection errors
+
 prisma.$connect()
   .then(() => {
-    console.log('Database connected successfully');
+    logger.info('Database connected successfully');
   })
   .catch((error) => {
-    console.error('Failed to connect to database:', error);
+    logger.error('Failed to connect to database:', error);
     process.exit(1);
   });
