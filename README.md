@@ -238,6 +238,16 @@ npm install
 cp .env.example .env
 # Edite .env com suas configurações
 
+# ATENÇÃO: JWT_SECRET em produção
+# - O aplicativo exige que JWT_SECRET esteja definida quando NODE_ENV=production.
+# - Em produção, NÃO armazene segredos em arquivos .env; use um gerenciador de segredos (Vault, AWS Secrets Manager, Kubernetes Secrets, etc.) ou variáveis de ambiente da sua plataforma.
+# - Para gerar um segredo forte localmente, por exemplo:
+#    openssl rand -hex 32
+#    ou: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+# - Exporte a variável no ambiente de produção (exemplo em Linux):
+#    export JWT_SECRET="$(openssl rand -hex 32)"
+# - Não copie o valor de desenvolvimento do .env.example para produção.
+
 # Gerar cliente Prisma
 npx prisma generate
 
