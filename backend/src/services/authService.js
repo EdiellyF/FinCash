@@ -7,6 +7,17 @@ import * as otplib from 'otplib';
 import crypto from 'crypto';
 import { env } from '../config/env.js';
 
+// Normalize bcrypt import shape to support both runtime (default export) and test mocks
+const bcryptLib = (function () {
+  try {
+    if (bcrypt && typeof bcrypt.hash === 'function') return bcrypt;
+    if (bcrypt && bcrypt.default && typeof bcrypt.default.hash === 'function') return bcrypt.default;
+  } catch (e) {
+    // ignore and fallback
+  }
+  return bcrypt;
+})();
+
 // Compatibility wrapper: otplib may not expose authenticator in all test environments/mocks
 const authenticator = (otplib && otplib.authenticator) ? otplib.authenticator : {
   generateSecret: () => crypto.randomBytes(10).toString('hex'),
@@ -39,14 +50,14 @@ export async function registerUser(data) {
     throw new ConflictError('E-mail já cadastrado.');
   }
 
-  const passwordHash = await bcrypt.hash(data.password, 10);
+  const passwordHash = await bcryptLib.hash(data.password, 10);
 
   // generate TOTP secret and backup codes
   const secret = authenticator.generateSecret();
   const totpUri = authenticator.keyuri(data.email, env.nodeEnv === 'production' ? 'FinCash' : 'FinCash (dev)', secret);
 
   const plainBackupCodes = generatePlainBackupCodes(8);
-  const hashedBackupCodes = await Promise.all(plainBackupCodes.map(c => bcrypt.hash(c, 10)));
+  const hashedBackupCodes = await Promise.all(plainBackupCodes.map(c => bcryptLib.hash(c, 10)));
 
   const user = await prisma.user.create({
     data: {
@@ -90,7 +101,7 @@ export async function loginUser(data) {
     throw new AuthenticationError('Credenciais inválidas.');
   }
 
-  const passwordMatch = await bcrypt.compare(data.password, user.passwordHash);
+  const passwordMatch = await bcryptLib.compare(data.password, user.passwordHash);
   if (!passwordMatch) {
     logger.warn('Login attempt with wrong password', { email: data.email, userId: user.id });
     throw new AuthenticationError('Credenciais inválidas.');
@@ -124,7 +135,7 @@ export async function backupLogin(email, backupCode) {
   // stored is expected to be array of hashed codes
   let matchedIndex = -1;
   for (let i = 0; i < stored.length; i++) {
-    const ok = await bcrypt.compare(backupCode, stored[i]);
+    const ok = await bcryptLib.compare(backupCode, stored[i]);
     if (ok) {
       matchedIndex = i;
       break;
@@ -149,7 +160,7 @@ export async function generateNewBackupCodesForUserId(userId) {
   if (!user) throw new NotFoundError('Usuário não encontrado.');
 
   const plainBackupCodes = generatePlainBackupCodes(8);
-  const hashedBackupCodes = await Promise.all(plainBackupCodes.map(c => bcrypt.hash(c, 10)));
+  const hashedBackupCodes = await Promise.all(plainBackupCodes.map(c => bcryptLib.hash(c, 10)));
 
   await prisma.user.update({ where: { id: userId }, data: { backupCodes: hashedBackupCodes } });
 
@@ -163,7 +174,7 @@ export async function resetTotpForUser(userId) {
 
   const secret = authenticator.generateSecret();
   const plainBackupCodes = generatePlainBackupCodes(8);
-  const hashedBackupCodes = await Promise.all(plainBackupCodes.map(c => bcrypt.hash(c, 10)));
+  const hashedBackupCodes = await Promise.all(plainBackupCodes.map(c => bcryptLib.hash(c, 10)));
 
   await prisma.user.update({ where: { id: userId }, data: { totpSecret: secret, totpEnabled: false, backupCodes: hashedBackupCodes } });
 
@@ -186,7 +197,7 @@ export async function resetPassword(email, newPassword) {
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user) throw new NotFoundError('Usuário não encontrado.');
 
-  const passwordHash = await bcrypt.hash(newPassword, 10);
+  const passwordHash = await bcryptLib.hash(newPassword, 10);
   await prisma.user.update({
     where: { email },
     data: { passwordHash }
