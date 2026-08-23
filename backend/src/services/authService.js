@@ -18,12 +18,30 @@ const bcryptLib = (function () {
   return bcrypt;
 })();
 
-// Compatibility wrapper: otplib may not expose authenticator in all test environments/mocks
-const authenticator = (otplib && otplib.authenticator) ? otplib.authenticator : {
-  generateSecret: () => crypto.randomBytes(10).toString('hex'),
-  keyuri: (user, service, secret) => `otpauth://totp/${service}:${user}?secret=${secret}&issuer=${service}`,
-  verify: () => false
-};
+// Helper wrapper for otplib compatibility across versions
+const hasOtplibModernApi = otplib && typeof otplib.generateSecret === 'function' && typeof otplib.generateURI === 'function' && typeof otplib.verify === 'function';
+
+function generateSecret() {
+  if (hasOtplibModernApi) return otplib.generateSecret();
+  // fallback for test environments: generate hex string (not recommended for production)
+  return crypto.randomBytes(10).toString('hex');
+}
+
+function generateUri(secret, email) {
+  const issuer = env.nodeEnv === 'production' ? 'FinCash' : 'FinCash (dev)';
+  if (hasOtplibModernApi) {
+    return otplib.generateURI({ secret, label: email, issuer });
+  }
+  return `otpauth://totp/${issuer}:${email}?secret=${secret}&issuer=${issuer}`;
+}
+
+async function verifyTotp(token, secret) {
+  const t = String(token).trim();
+  if (hasOtplibModernApi) {
+    return await otplib.verify({ token: t, secret, window: 1 });
+  }
+  return false;
+}
 
 function publicUser(user) {
   return {
@@ -53,8 +71,8 @@ export async function registerUser(data) {
   const passwordHash = await bcryptLib.hash(data.password, 10);
 
   // generate TOTP secret and backup codes
-  const secret = authenticator.generateSecret();
-  const totpUri = authenticator.keyuri(data.email, env.nodeEnv === 'production' ? 'FinCash' : 'FinCash (dev)', secret);
+  const secret = generateSecret();
+  const totpUri = generateUri(secret, data.email);
 
   const plainBackupCodes = generatePlainBackupCodes(8);
   const hashedBackupCodes = await Promise.all(plainBackupCodes.map(c => bcryptLib.hash(c, 10)));
@@ -83,8 +101,7 @@ export async function confirmTotp(emailOrId, token) {
   if (!user) throw new NotFoundError('Usuário não encontrado.');
   if (!user.totpSecret) throw new ValidationError('TOTP não configurado para este usuário.');
 
-  const t = String(token).trim();
-  const ok = authenticator.verify({ token: t, secret: user.totpSecret, window: 1 });
+  const ok = await verifyTotp(token, user.totpSecret);
   if (!ok) {
     logger.warn('Invalid TOTP confirmation attempt', { userId: user.id });
     throw new ValidationError('Código TOTP inválido.');
@@ -113,7 +130,7 @@ export async function loginUser(data) {
     if (!data.totpCode) {
       throw new AuthenticationError('Código TOTP necessário.');
     }
-    const totpValid = authenticator.verify({ token: data.totpCode, secret: user.totpSecret, window: 1 });
+    const totpValid = await verifyTotp(data.totpCode, user.totpSecret);
     if (!totpValid) {
       logger.warn('Invalid TOTP on login', { userId: user.id });
       throw new AuthenticationError('Código TOTP inválido.');
@@ -173,13 +190,13 @@ export async function resetTotpForUser(userId) {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new NotFoundError('Usuário não encontrado.');
 
-  const secret = authenticator.generateSecret();
+  const secret = generateSecret();
   const plainBackupCodes = generatePlainBackupCodes(8);
   const hashedBackupCodes = await Promise.all(plainBackupCodes.map(c => bcryptLib.hash(c, 10)));
 
   await prisma.user.update({ where: { id: userId }, data: { totpSecret: secret, totpEnabled: false, backupCodes: hashedBackupCodes } });
 
-  const totpUri = authenticator.keyuri(user.email, env.nodeEnv === 'production' ? 'FinCash' : 'FinCash (dev)', secret);
+  const totpUri = generateUri(secret, user.email);
 
   logger.info('Reset TOTP for user', { userId });
   return { totpUri, backupCodes: plainBackupCodes };
