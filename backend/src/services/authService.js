@@ -182,6 +182,12 @@ export async function confirmTotp(emailOrId, token) {
 
 export async function loginUser(data) {
   const user = await prisma.user.findUnique({ where: { email: data.email } });
+  if (user) {
+    const masked = user.totpSecret ? `${String(user.totpSecret).slice(0,4)}...${String(user.totpSecret).slice(-4)}` : null;
+    logger.debug('LoginUser called', { email: data.email, userId: user.id, totpEnabled: user.totpEnabled, totpSecretMasked: masked, tokenMasked: data.totpCode ? String(data.totpCode).slice(0,3)+'***' : null });
+  } else {
+    logger.debug('LoginUser called for non-existing user', { email: data.email });
+  }
   if (!user) {
     logger.warn('Login attempt with non-existent email', { email: data.email });
     throw new AuthenticationError('Credenciais inválidas.');
