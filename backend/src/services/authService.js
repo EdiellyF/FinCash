@@ -87,21 +87,34 @@ async function normalizeSecretToBase32(secret) {
 async function verifyTotp(token, secret) {
   const t = String(token).trim();
   const normalized = await normalizeSecretToBase32(secret);
-  if (hasOtplibModernApi) {
+
+  // List of candidate verification callables in order of preference
+  const candidates = [];
+  if (otplib.totp && typeof otplib.totp.check === 'function') candidates.push(() => otplib.totp.check(t, normalized));
+  if (typeof otplib.verify === 'function') candidates.push(() => otplib.verify({ token: t, secret: normalized, window: 1 }));
+  if (typeof otplib.verifySync === 'function') candidates.push(() => otplib.verifySync({ token: t, secret: normalized, window: 1 }));
+  if (otplib.authenticator && typeof otplib.authenticator.check === 'function') candidates.push(() => otplib.authenticator.check(t, normalized));
+
+  for (const fn of candidates) {
     try {
-      return await otplib.verify({ token: t, secret: normalized, window: 1 });
-    } catch (err) {
-      // As a fallback, try old authenticator API if available with original secret
-      if (otplib.authenticator && typeof otplib.authenticator.check === 'function') {
-        try {
-          return otplib.authenticator.check(t, normalized);
-        } catch (e) {
-          // swallow and return false
-        }
+      const res = fn();
+      const value = res instanceof Promise ? await res : res;
+      // otplib may return boolean or an object; handle common shapes
+      if (typeof value === 'boolean') return value;
+      if (value && typeof value === 'object') {
+        // Some otplib variants return { valid: true } or { isValid: true }
+        if (typeof value.valid === 'boolean') return value.valid;
+        if (typeof value.isValid === 'boolean') return value.isValid;
+        // fallback: truthy object means success? be strict: treat truthy as false unless explicit
+        // but if it contains a 'delta' number (steps off), consider valid when delta within window
+        if (typeof value.delta === 'number') return true;
       }
-      throw err;
+    } catch (err) {
+      // ignore and try next candidate
+      logger.debug('verifyTotp candidate error', { err: err.message || err });
     }
   }
+
   return false;
 }
 
