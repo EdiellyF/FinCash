@@ -23,8 +23,29 @@ const hasOtplibModernApi = otplib && typeof otplib.generateSecret === 'function'
 
 function generateSecret() {
   if (hasOtplibModernApi) return otplib.generateSecret();
-  // fallback for test environments: generate hex string (not recommended for production)
-  return crypto.randomBytes(10).toString('hex');
+  // Try older otplib authenticator API if present (returns base32)
+  if (otplib.authenticator && typeof otplib.authenticator.generateSecret === 'function') {
+    return otplib.authenticator.generateSecret();
+  }
+  // Fallback: generate random bytes and encode to Base32 (ensure compatibility with most authenticators)
+  const bytes = crypto.randomBytes(10);
+  const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let bits = 0;
+  let value = 0;
+  let output = '';
+  for (let i = 0; i < bytes.length; i++) {
+    value = (value << 8) | bytes[i];
+    bits += 8;
+    while (bits >= 5) {
+      output += ALPHABET[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+  if (bits > 0) {
+    output += ALPHABET[(value << (5 - bits)) & 31];
+  }
+  // padding is optional for TOTP secrets; return uppercase base32 without padding
+  return output;
 }
 
 function generateUri(secret, email) {
