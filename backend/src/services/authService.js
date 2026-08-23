@@ -56,10 +56,51 @@ function generateUri(secret, email) {
   return `otpauth://totp/${issuer}:${email}?secret=${secret}&issuer=${issuer}`;
 }
 
+async function normalizeSecretToBase32(secret) {
+  if (!secret) return secret;
+  // If secret already looks like base32 (A-Z2-7), return uppercased
+  if (/^[A-Z2-7]+=*$/i.test(secret)) return String(secret).replace(/=+$/, '').toUpperCase();
+  // If hex-like, convert to base32
+  if (/^[0-9a-fA-F]+$/.test(secret)) {
+    const bytes = Buffer.from(secret, 'hex');
+    const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    let bits = 0;
+    let value = 0;
+    let output = '';
+    for (let i = 0; i < bytes.length; i++) {
+      value = (value << 8) | bytes[i];
+      bits += 8;
+      while (bits >= 5) {
+        output += ALPHABET[(value >>> (bits - 5)) & 31];
+        bits -= 5;
+      }
+    }
+    if (bits > 0) {
+      output += ALPHABET[(value << (5 - bits)) & 31];
+    }
+    return output;
+  }
+  // otherwise, return as-is
+  return secret;
+}
+
 async function verifyTotp(token, secret) {
   const t = String(token).trim();
+  const normalized = await normalizeSecretToBase32(secret);
   if (hasOtplibModernApi) {
-    return await otplib.verify({ token: t, secret, window: 1 });
+    try {
+      return await otplib.verify({ token: t, secret: normalized, window: 1 });
+    } catch (err) {
+      // As a fallback, try old authenticator API if available with original secret
+      if (otplib.authenticator && typeof otplib.authenticator.check === 'function') {
+        try {
+          return otplib.authenticator.check(t, normalized);
+        } catch (e) {
+          // swallow and return false
+        }
+      }
+      throw err;
+    }
   }
   return false;
 }
