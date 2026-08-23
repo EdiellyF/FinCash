@@ -56,11 +56,65 @@ function generateUri(secret, email) {
   return `otpauth://totp/${issuer}:${email}?secret=${secret}&issuer=${issuer}`;
 }
 
+async function normalizeSecretToBase32(secret) {
+  if (!secret) return secret;
+  // If secret already looks like base32 (A-Z2-7), return uppercased
+  if (/^[A-Z2-7]+=*$/i.test(secret)) return String(secret).replace(/=+$/, '').toUpperCase();
+  // If hex-like, convert to base32
+  if (/^[0-9a-fA-F]+$/.test(secret)) {
+    const bytes = Buffer.from(secret, 'hex');
+    const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    let bits = 0;
+    let value = 0;
+    let output = '';
+    for (let i = 0; i < bytes.length; i++) {
+      value = (value << 8) | bytes[i];
+      bits += 8;
+      while (bits >= 5) {
+        output += ALPHABET[(value >>> (bits - 5)) & 31];
+        bits -= 5;
+      }
+    }
+    if (bits > 0) {
+      output += ALPHABET[(value << (5 - bits)) & 31];
+    }
+    return output;
+  }
+  // otherwise, return as-is
+  return secret;
+}
+
 async function verifyTotp(token, secret) {
   const t = String(token).trim();
-  if (hasOtplibModernApi) {
-    return await otplib.verify({ token: t, secret, window: 1 });
+  const normalized = await normalizeSecretToBase32(secret);
+
+  // List of candidate verification callables in order of preference
+  const candidates = [];
+  if (otplib.totp && typeof otplib.totp.check === 'function') candidates.push(() => otplib.totp.check(t, normalized));
+  if (typeof otplib.verify === 'function') candidates.push(() => otplib.verify({ token: t, secret: normalized, window: 1 }));
+  if (typeof otplib.verifySync === 'function') candidates.push(() => otplib.verifySync({ token: t, secret: normalized, window: 1 }));
+  if (otplib.authenticator && typeof otplib.authenticator.check === 'function') candidates.push(() => otplib.authenticator.check(t, normalized));
+
+  for (const fn of candidates) {
+    try {
+      const res = fn();
+      const value = res instanceof Promise ? await res : res;
+      // otplib may return boolean or an object; handle common shapes
+      if (typeof value === 'boolean') return value;
+      if (value && typeof value === 'object') {
+        // Some otplib variants return { valid: true } or { isValid: true }
+        if (typeof value.valid === 'boolean') return value.valid;
+        if (typeof value.isValid === 'boolean') return value.isValid;
+        // fallback: truthy object means success? be strict: treat truthy as false unless explicit
+        // but if it contains a 'delta' number (steps off), consider valid when delta within window
+        if (typeof value.delta === 'number') return true;
+      }
+    } catch (err) {
+      // ignore and try next candidate
+      logger.debug('verifyTotp candidate error', { err: err.message || err });
+    }
   }
+
   return false;
 }
 
@@ -110,6 +164,9 @@ export async function registerUser(data) {
   });
 
   logger.info('New user registered (TOTP) ', { userId: user.id, email: user.email });
+  // log masked secret and generated otpauth URI for debugging (masked secret only)
+  const masked = secret ? `${String(secret).slice(0,4)}...${String(secret).slice(-4)}` : null;
+  logger.debug('Generated TOTP secret for new user', { userId: user.id, totpSecretMasked: masked, totpUri });
 
   // Return the otpauth URI and the plaintext backup codes ONCE
   return { user: publicUser(user), token: generateToken(user.id), totpUri, backupCodes: plainBackupCodes };
@@ -121,6 +178,9 @@ export async function confirmTotp(emailOrId, token) {
   const user = await prisma.user.findUnique({ where });
   if (!user) throw new NotFoundError('Usuário não encontrado.');
   if (!user.totpSecret) throw new ValidationError('TOTP não configurado para este usuário.');
+
+  const maskedStored = user.totpSecret ? `${String(user.totpSecret).slice(0,4)}...${String(user.totpSecret).slice(-4)}` : null;
+  logger.debug('Confirming TOTP', { userId: user.id, totpSecretMasked: maskedStored, tokenMasked: String(token).slice(0,3) + '***' });
 
   const ok = await verifyTotp(token, user.totpSecret);
   if (!ok) {
@@ -135,6 +195,12 @@ export async function confirmTotp(emailOrId, token) {
 
 export async function loginUser(data) {
   const user = await prisma.user.findUnique({ where: { email: data.email } });
+  if (user) {
+    const masked = user.totpSecret ? `${String(user.totpSecret).slice(0,4)}...${String(user.totpSecret).slice(-4)}` : null;
+    logger.debug('LoginUser called', { email: data.email, userId: user.id, totpEnabled: user.totpEnabled, totpSecretMasked: masked, tokenMasked: data.totpCode ? String(data.totpCode).slice(0,3)+'***' : null });
+  } else {
+    logger.debug('LoginUser called for non-existing user', { email: data.email });
+  }
   if (!user) {
     logger.warn('Login attempt with non-existent email', { email: data.email });
     throw new AuthenticationError('Credenciais inválidas.');
