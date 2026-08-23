@@ -83,7 +83,8 @@ export async function confirmTotp(emailOrId, token) {
   if (!user) throw new NotFoundError('Usuário não encontrado.');
   if (!user.totpSecret) throw new ValidationError('TOTP não configurado para este usuário.');
 
-  const ok = authenticator.verify({ token, secret: user.totpSecret });
+  const t = String(token).trim();
+  const ok = authenticator.verify({ token: t, secret: user.totpSecret, window: 1 });
   if (!ok) {
     logger.warn('Invalid TOTP confirmation attempt', { userId: user.id });
     throw new ValidationError('Código TOTP inválido.');
