@@ -1,19 +1,23 @@
 import { created, ok } from '../utils/response.js';
-import { forgotPassword, loginUser, registerUser, resetPassword } from '../services/authService.js';
-import bcrypt from 'bcryptjs';
-import { PrismaClient } from '@prisma/client';
-import { sendOTP } from '../services/emailService.js';
+import {
+  forgotPassword,
+  loginUser,
+  registerUser,
+  resetPassword,
+  confirmTotp,
+  backupLogin,
+  generateNewBackupCodesForUserId,
+  resetTotpForUser
+} from '../services/authService.js';
 import { ValidationError, NotFoundError, ConflictError } from '../utils/errors.js';
 import { logger } from '../config/logger.js';
-import { env } from '../config/env.js';
-
-const prisma = new PrismaClient();
 
 export async function register(req, res) {
   logger.info('User registration attempt', { email: req.validatedData.email });
   const result = await registerUser(req.validatedData);
   logger.info('User registered successfully', { userId: result.user.id });
-  return created(res, result, 'Cadastro realizado com sucesso.');
+  // result contains { user, totpUri, backupCodes }
+  return created(res, result, 'Cadastro realizado com sucesso. Retorne o QR (otpauth URI) e códigos de backup ao usuário UMA VEZ.');
 }
 
 export async function login(req, res) {
@@ -41,157 +45,50 @@ export async function resetPasswordController(req, res) {
   return ok(res, result, 'Senha redefinida com sucesso.');
 }
 
-export async function requestRegister(req, res) {
-  const { name, email, password } = req.body;
-
-  logger.info('Registration request with OTP', { email });
-
-  if (!name || name.trim().length < 3) {
-    throw new ValidationError('Nome deve ter pelo menos 3 caracteres');
-  }
-
-  if (!email || !email.includes('@')) {
-    throw new ValidationError('Email inválido');
-  }
-
-  if (!password || password.length < 6) {
-    throw new ValidationError('Senha deve ter pelo menos 6 caracteres');
-  }
-
-  const existingUser = await prisma.user.findUnique({
-    where: { email }
-  });
-
-  if (existingUser) {
-    throw new ConflictError('Email já cadastrado');
-  }
-
-  const otp = Math.floor(
-    100000 + Math.random() * 900000
-  ).toString();
-
-  const otpExpiresAt = new Date(
-    Date.now() + 10 * 60 * 1000
-  );
-
-  const hashedPassword = await bcrypt.hash(password, 10);
-
-  await prisma.pendingUser.upsert({
-    where: { email },
-    update: {
-      name,
-      password: hashedPassword,
-      otpCode: otp,
-      otpExpiresAt
-    },
-    create: {
-      name,
-      email,
-      password: hashedPassword,
-      otpCode: otp,
-      otpExpiresAt
-    }
-  });
-
-  logger.info('Pending user created/updated', { email, otpExpiresAt });
-
-  try {
-    await sendOTP(email, otp);
-    logger.info('OTP sent successfully', { email });
-  } catch (emailError) {
-    logger.error('Failed to send OTP', { email, error: emailError.message });
-    if (env.nodeEnv === 'development') {
-      logger.warn('Development mode: OTP for testing', { email, otp });
-    } else {
-      throw emailError;
-    }
-  }
-
-  return created(res, { email }, 'OTP enviado');
+export async function totpConfirmController(req, res) {
+  const { email, totpCode } = req.validatedData;
+  logger.info('TOTP confirmation attempt', { email });
+  const result = await confirmTotp(email, totpCode);
+  return ok(res, result, 'TOTP confirmado com sucesso.');
 }
 
-export async function verifyRegister(req, res) {
-  const { email, otp } = req.body;
-
-  logger.info('OTP verification attempt', { email });
-
-  const pendingUser = await prisma.pendingUser.findUnique({
-    where: { email }
-  });
-
-  if (!pendingUser) {
-    throw new NotFoundError('Solicitação não encontrada');
-  }
-
-  if (pendingUser.otpCode !== otp) {
-    logger.warn('Invalid OTP attempt', { email });
-    throw new ValidationError('Código inválido');
-  }
-
-  if (new Date() > pendingUser.otpExpiresAt) {
-    logger.warn('Expired OTP attempt', { email });
-    throw new ValidationError('Código expirado');
-  }
-
-  const user = await prisma.user.create({
-    data: {
-      name: pendingUser.name,
-      email: pendingUser.email,
-      passwordHash: pendingUser.password
-    }
-  });
-
-  await prisma.pendingUser.delete({
-    where: { email }
-  });
-
-  logger.info('User account created successfully', { userId: user.id, email });
-
-  return created(res, { user }, 'Conta criada com sucesso');
+export async function backupLoginController(req, res) {
+  const { email, backupCode } = req.validatedData;
+  logger.info('Backup login attempt', { email });
+  const result = await backupLogin(email, backupCode);
+  logger.info('Backup login successful', { userId: result.user.id });
+  return ok(res, result, 'Login via código de backup realizado com sucesso.');
 }
 
-export async function resendOTP(req, res) {
-  const { email } = req.body;
+export async function resetTotpController(req, res) {
+  // This endpoint supports two modes:
+  // - authenticated user (req.user) can request action: generate_backup or reset_totp
+  // - unauthenticated user can provide email + backupCode to authenticate, which will consume that backup code, then reset TOTP
+  const action = req.validatedData.action || 'generate_backup';
 
-  logger.info('OTP resend request', { email });
+  if (req.user?.id) {
+    const userId = req.user.id;
+    if (action === 'generate_backup') {
+      const result = await generateNewBackupCodesForUserId(userId);
+      return ok(res, result, 'Novos códigos de backup gerados. Mostre-os UMA VEZ.');
+    }
 
-  const pendingUser = await prisma.pendingUser.findUnique({
-    where: { email }
-  });
+    if (action === 'reset_totp') {
+      const result = await resetTotpForUser(userId);
+      return ok(res, result, 'TOTP reiniciado. Forneça novo otpauth URI e códigos de backup UMA VEZ.');
+    }
+  } else {
+    const { email, backupCode } = req.validatedData;
+    if (!email || !backupCode) throw new ValidationError('Email e código de backup são necessários para reset sem autenticação.');
 
-  if (!pendingUser) {
-    throw new NotFoundError('Solicitação não encontrada');
+    // backupLogin will consume the provided backup code
+    const loginResult = await backupLogin(email, backupCode);
+    const userId = loginResult.user.id;
+
+    // after successful backup login, perform reset_totp
+    const result = await resetTotpForUser(userId);
+    return ok(res, result, 'TOTP reiniciado usando código de backup. Forneça novo otpauth URI e códigos de backup UMA VEZ.');
   }
 
-  const otp = Math.floor(
-    100000 + Math.random() * 900000
-  ).toString();
-
-  const otpExpiresAt = new Date(
-    Date.now() + 10 * 60 * 1000
-  );
-
-  await prisma.pendingUser.update({
-    where: { email },
-    data: {
-      otpCode: otp,
-      otpExpiresAt
-    }
-  });
-
-  logger.info('Pending user updated with new OTP', { email, otpExpiresAt });
-
-  try {
-    await sendOTP(email, otp);
-    logger.info('New OTP sent successfully', { email });
-  } catch (emailError) {
-    logger.error('Failed to resend OTP', { email, error: emailError.message });
-    if (env.nodeEnv === 'development') {
-      logger.warn('Development mode: OTP for testing', { email, otp });
-    } else {
-      throw emailError;
-    }
-  }
-
-  return ok(res, null, 'Novo código enviado');
+  throw new ValidationError('Ação inválida');
 }

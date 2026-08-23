@@ -17,13 +17,15 @@ export default function Register() {
 
   async function onSubmit(values) {
     try {
-      await api.post('/auth/request-register', values);
+      // use AuthContext.register which now returns data including totpUri and backupCodes
+      const result = await register(values);
 
-      toast.success('Código enviado para seu email');
+      toast.success('Conta criada. Configure o TOTP e salve seus códigos de backup.');
 
-      navigate('/verify-email', {
+      navigate('/setup-totp', {
         state: {
-          email: values.email
+          totpUri: result.totpUri,
+          backupCodes: result.backupCodes
         }
       });
     } catch (error) {

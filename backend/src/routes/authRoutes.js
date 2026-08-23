@@ -4,20 +4,21 @@ import {
   login,
   logout,
   register,
-  resetPasswordController
+  resetPasswordController,
+  totpConfirmController,
+  backupLoginController,
+  resetTotpController
 } from '../controllers/authController.js';
 import { validate } from '../middlewares/validateMiddleware.js';
 import {
   forgotPasswordSchema,
   loginSchema,
   registerSchema,
-  resetPasswordSchema
+  resetPasswordSchema,
+  totpConfirmSchema,
+  backupLoginSchema,
+  totpResetSchema
 } from '../validations/authValidation.js';
-import {
-  requestRegister,
-  verifyRegister,
-  resendOTP
-} from '../controllers/authController.js';
 
 const router = Router();
 
@@ -65,6 +66,10 @@ const router = Router();
  *               $ref: '#/components/schemas/Error'
  */
 router.post('/register', validate(registerSchema), register);
+// New TOTP endpoints
+router.post('/totp/confirm', validate(totpConfirmSchema), totpConfirmController);
+router.post('/totp/backup-login', validate(backupLoginSchema), backupLoginController);
+router.post('/totp/reset', validate(totpResetSchema), resetTotpController);
 
 /**
  * @swagger
@@ -215,123 +220,7 @@ router.post('/forgot-password', validate(forgotPasswordSchema), forgotPasswordCo
  */
 router.post('/reset-password', validate(resetPasswordSchema), resetPasswordController);
 
-/**
- * @swagger
- * /api/auth/request-register:
- *   post:
- *     summary: Request registration with email OTP
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - name
- *               - email
- *               - password
- *             properties:
- *               name:
- *                 type: string
- *                 minLength: 3
- *                 example: "John Doe"
- *               email:
- *                 type: string
- *                 format: email
- *                 example: "john@example.com"
- *               password:
- *                 type: string
- *                 minLength: 6
- *                 example: "password123"
- *     responses:
- *       200:
- *         description: OTP sent to email
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Success'
- *       400:
- *         description: Invalid input or email already exists
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- */
-router.post('/request-register', requestRegister);
 
-/**
- * @swagger
- * /api/auth/verify-register:
- *   post:
- *     summary: Verify email with OTP
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - otp
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: "john@example.com"
- *               otp:
- *                 type: string
- *                 example: "123456"
- *     responses:
- *       200:
- *         description: Email verified successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Success'
- *       400:
- *         description: Invalid or expired OTP
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- */
-router.post('/verify-register', verifyRegister);
 
-/**
- * @swagger
- * /api/auth/resend-otp:
- *   post:
- *     summary: Resend OTP to email
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: "john@example.com"
- *     responses:
- *       200:
- *         description: New OTP sent
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Success'
- *       404:
- *         description: User not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- */
-router.post('/resend-otp', resendOTP);
 
 export default router;

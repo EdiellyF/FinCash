@@ -22,6 +22,11 @@ model User {
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
 
+  // TOTP fields
+  totpSecret   String?       @map("totp_secret")
+  totpEnabled  Boolean       @default(false) @map("totp_enabled")
+  backupCodes  Json?         @map("backup_codes")
+
   categories   Category[]
   transactions Transaction[]
   goals        Goal[]

@@ -42,6 +42,10 @@ export default function Login() {
               <label className="mb-1 block text-xs font-semibold text-slate-500">Senha</label>
               <input {...registerInput('password')} type="password" placeholder="••••••••" required />
             </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-500">Código TOTP (6 dígitos)</label>
+              <input {...registerInput('totpCode')} type="text" placeholder="123456" />
+            </div>
             <button
               type="submit"
               disabled={isSubmitting}

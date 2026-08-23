@@ -15,6 +15,8 @@ import Education from '../pages/Education';
 import Chat from '../pages/Chat';
 import Stats from '../pages/Stats';
 import VerifyEmail from '../pages/VerifyEmail';
+import BackupLogin from '../pages/BackupLogin';
+import SetupTotp from '../pages/SetupTotp';
 
 export default function AppRoutes() {
   return (
@@ -22,6 +24,7 @@ export default function AppRoutes() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/setup-totp" element={<SetupTotp />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
 
@@ -36,6 +39,7 @@ export default function AppRoutes() {
         <Route path="/stats" element={<PrivateRoute><Stats /></PrivateRoute>} />
         <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
         <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/backup-login" element={<BackupLogin />} />
 
       </Routes>
     </BrowserRouter>

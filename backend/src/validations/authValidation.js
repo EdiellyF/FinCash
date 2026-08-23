@@ -8,7 +8,24 @@ export const registerSchema = z.object({
 
 export const loginSchema = z.object({
   email: z.string().email('E-mail inválido.'),
-  password: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres.')
+  password: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres.'),
+  totpCode: z.string().length(6, 'Código TOTP deve ter 6 dígitos.')
+});
+
+export const totpConfirmSchema = z.object({
+  email: z.string().email('E-mail inválido.'),
+  totpCode: z.string().length(6, 'Código TOTP deve ter 6 dígitos.')
+});
+
+export const backupLoginSchema = z.object({
+  email: z.string().email('E-mail inválido.'),
+  backupCode: z.string().min(6)
+});
+
+export const totpResetSchema = z.object({
+  action: z.enum(['generate_backup', 'reset_totp']).optional(),
+  email: z.string().email('E-mail inválido.').optional(),
+  backupCode: z.string().optional()
 });
 
 export const forgotPasswordSchema = z.object({

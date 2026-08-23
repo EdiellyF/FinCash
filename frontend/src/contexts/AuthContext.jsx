@@ -14,10 +14,12 @@ export function AuthProvider({ children }) {
   }, []);
 
   async function register(payload) {
-    const { data } = await api.post('/auth/register', payload);
-    localStorage.setItem('finance_token', data.data.token);
-    localStorage.setItem('finance_user', JSON.stringify(data.data.user));
-    setUser(data.data.user);
+    const resp = await api.post('/auth/register', payload);
+    const data = resp.data.data;
+    localStorage.setItem('finance_token', data.token);
+    localStorage.setItem('finance_user', JSON.stringify(data.user));
+    setUser(data.user);
+    return data; // return data so caller can access totpUri and backupCodes
   }
 
   async function login(payload) {
