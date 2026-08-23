@@ -151,6 +151,9 @@ export async function registerUser(data) {
   });
 
   logger.info('New user registered (TOTP) ', { userId: user.id, email: user.email });
+  // log masked secret and generated otpauth URI for debugging (masked secret only)
+  const masked = secret ? `${String(secret).slice(0,4)}...${String(secret).slice(-4)}` : null;
+  logger.debug('Generated TOTP secret for new user', { userId: user.id, totpSecretMasked: masked, totpUri });
 
   // Return the otpauth URI and the plaintext backup codes ONCE
   return { user: publicUser(user), token: generateToken(user.id), totpUri, backupCodes: plainBackupCodes };
@@ -162,6 +165,9 @@ export async function confirmTotp(emailOrId, token) {
   const user = await prisma.user.findUnique({ where });
   if (!user) throw new NotFoundError('Usuário não encontrado.');
   if (!user.totpSecret) throw new ValidationError('TOTP não configurado para este usuário.');
+
+  const maskedStored = user.totpSecret ? `${String(user.totpSecret).slice(0,4)}...${String(user.totpSecret).slice(-4)}` : null;
+  logger.debug('Confirming TOTP', { userId: user.id, totpSecretMasked: maskedStored, tokenMasked: String(token).slice(0,3) + '***' });
 
   const ok = await verifyTotp(token, user.totpSecret);
   if (!ok) {
