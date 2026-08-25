@@ -163,10 +163,7 @@ export async function registerUser(data) {
     }
   });
 
-  logger.info('New user registered (TOTP) ', { userId: user.id, email: user.email });
-  // log masked secret and generated otpauth URI for debugging (masked secret only)
-  const masked = secret ? `${String(secret).slice(0,4)}...${String(secret).slice(-4)}` : null;
-  logger.debug('Generated TOTP secret for new user', { userId: user.id, totpSecretMasked: masked, totpUri });
+  logger.info('New user registered (TOTP)', { userId: user.id, result: 'success' });
 
   // Return the otpauth URI and the plaintext backup codes ONCE
   return { user: publicUser(user), token: generateToken(user.id), totpUri, backupCodes: plainBackupCodes };
@@ -179,52 +176,44 @@ export async function confirmTotp(emailOrId, token) {
   if (!user) throw new NotFoundError('Usuário não encontrado.');
   if (!user.totpSecret) throw new ValidationError('TOTP não configurado para este usuário.');
 
-  const maskedStored = user.totpSecret ? `${String(user.totpSecret).slice(0,4)}...${String(user.totpSecret).slice(-4)}` : null;
-  logger.debug('Confirming TOTP', { userId: user.id, totpSecretMasked: maskedStored, tokenMasked: String(token).slice(0,3) + '***' });
-
   const ok = await verifyTotp(token, user.totpSecret);
   if (!ok) {
-    logger.warn('Invalid TOTP confirmation attempt', { userId: user.id });
+    logger.warn('Invalid TOTP confirmation attempt', { userId: user.id, result: 'failure' });
     throw new ValidationError('Código TOTP inválido.');
   }
 
   await prisma.user.update({ where, data: { totpEnabled: true } });
-  logger.info('User confirmed TOTP setup', { userId: user.id });
+  logger.info('User confirmed TOTP setup', { userId: user.id, result: 'success' });
   return { success: true };
 }
 
 export async function loginUser(data) {
   const user = await prisma.user.findUnique({ where: { email: data.email } });
-  if (user) {
-    const masked = user.totpSecret ? `${String(user.totpSecret).slice(0,4)}...${String(user.totpSecret).slice(-4)}` : null;
-    logger.debug('LoginUser called', { email: data.email, userId: user.id, totpEnabled: user.totpEnabled, totpSecretMasked: masked, tokenMasked: data.totpCode ? String(data.totpCode).slice(0,3)+'***' : null });
-  } else {
-    logger.debug('LoginUser called for non-existing user', { email: data.email });
-  }
   if (!user) {
-    logger.warn('Login attempt with non-existent email', { email: data.email });
+    logger.warn('Login attempt with non-existent email', { userId: null, result: 'failure' });
     throw new AuthenticationError('Credenciais inválidas.');
   }
 
   const passwordMatch = await bcryptLib.compare(data.password, user.passwordHash);
   if (!passwordMatch) {
-    logger.warn('Login attempt with wrong password', { email: data.email, userId: user.id });
+    logger.warn('Login attempt with wrong password', { userId: user.id, result: 'failure' });
     throw new AuthenticationError('Credenciais inválidas.');
   }
 
   // If TOTP is enabled for the user, require and verify the code. Otherwise allow password-only login
   if (user.totpEnabled) {
     if (!data.totpCode) {
+      logger.warn('Login attempt missing TOTP code', { userId: user.id, result: 'failure' });
       throw new AuthenticationError('Código TOTP necessário.');
     }
     const totpValid = await verifyTotp(data.totpCode, user.totpSecret);
     if (!totpValid) {
-      logger.warn('Invalid TOTP on login', { userId: user.id });
+      logger.warn('Invalid TOTP on login', { userId: user.id, result: 'failure' });
       throw new AuthenticationError('Código TOTP inválido.');
     }
   }
 
-  logger.info('User logged in successfully (TOTP)', { userId: user.id, email: user.email });
+  logger.info('User logged in successfully', { userId: user.id, result: 'success' });
 
   return { user: publicUser(user), token: generateToken(user.id) };
 }
@@ -248,7 +237,7 @@ export async function backupLogin(email, backupCode) {
   }
 
   if (matchedIndex === -1) {
-    logger.warn('Invalid backup code attempt', { userId: user.id });
+    logger.warn('Invalid backup code attempt', { userId: user.id, result: 'failure' });
     throw new AuthenticationError('Código de backup inválido.');
   }
 
@@ -256,7 +245,7 @@ export async function backupLogin(email, backupCode) {
   const newCodes = stored.filter((_, idx) => idx !== matchedIndex);
   await prisma.user.update({ where: { email }, data: { backupCodes: newCodes } });
 
-  logger.info('User logged in with backup code', { userId: user.id });
+  logger.info('User logged in with backup code', { userId: user.id, result: 'success' });
   return { user: publicUser(user), token: generateToken(user.id) };
 }
 

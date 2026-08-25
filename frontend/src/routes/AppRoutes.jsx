@@ -2,8 +2,6 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import PrivateRoute from './PrivateRoute';
 import Login from '../pages/Login';
 import Register from '../pages/Register';
-import ForgotPassword from '../pages/ForgotPassword';
-import ResetPassword from '../pages/ResetPassword';
 import Dashboard from '../pages/Dashboard';
 import Transactions from '../pages/Transactions';
 import Categories from '../pages/Categories';
@@ -25,8 +23,6 @@ export default function AppRoutes() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/setup-totp" element={<SetupTotp />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
 
         <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
         <Route path="/transactions" element={<PrivateRoute><Transactions /></PrivateRoute>} />

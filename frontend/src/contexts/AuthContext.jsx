@@ -29,6 +29,13 @@ export function AuthProvider({ children }) {
     setUser(data.data.user);
   }
 
+  async function backupLogin(payload) {
+    const { data } = await api.post('/auth/totp/backup-login', payload);
+    localStorage.setItem('finance_token', data.data.token);
+    localStorage.setItem('finance_user', JSON.stringify(data.data.user));
+    setUser(data.data.user);
+  }
+
   async function refreshProfile() {
     const { data } = await api.get('/users/me');
     localStorage.setItem('finance_user', JSON.stringify(data.data));
@@ -41,7 +48,7 @@ export function AuthProvider({ children }) {
     setUser(null);
   }
 
-  const value = useMemo(() => ({ user, booting, register, login, logout, refreshProfile }), [user, booting]);
+  const value = useMemo(() => ({ user, booting, register, login, backupLogin, logout, refreshProfile }), [user, booting]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

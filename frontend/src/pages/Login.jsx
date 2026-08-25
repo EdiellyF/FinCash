@@ -57,10 +57,7 @@ export default function Login() {
           </div>
           <div className="mt-5 flex justify-between text-sm">
             <Link to="/register" className="font-medium text-emerald-600 hover:underline">Criar conta</Link>
-            <div className="flex gap-4">
-              <Link to="/forgot-password" className="font-medium text-slate-500 hover:underline">Recuperar senha</Link>
-              <Link to="/backup-login" className="font-medium text-slate-500 hover:underline">Perdi meu código</Link>
-            </div>
+            <Link to="/backup-login" className="font-medium text-slate-500 hover:underline">Perdi meu código</Link>
           </div>
         </form>
       </div>

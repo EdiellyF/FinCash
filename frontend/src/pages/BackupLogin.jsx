@@ -1,22 +1,20 @@
 import { useState } from 'react';
-import api from '../services/api';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
 
 export default function BackupLogin() {
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { backupLogin } = useAuth();
 
   async function handleSubmit(e) {
     e.preventDefault();
     try {
       setLoading(true);
-      const { data } = await api.post('/auth/totp/backup-login', { email, backupCode: code });
-      // store token and user
-      localStorage.setItem('finance_token', data.data.token);
-      localStorage.setItem('finance_user', JSON.stringify(data.data.user));
+      await backupLogin({ email, backupCode: code });
       toast.success('Login realizado com código de backup');
       navigate('/');
     } catch (err) {
