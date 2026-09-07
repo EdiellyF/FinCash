@@ -15,6 +15,7 @@ import Stats from '../pages/Stats';
 import VerifyEmail from '../pages/VerifyEmail';
 import BackupLogin from '../pages/BackupLogin';
 import SetupTotp from '../pages/SetupTotp';
+import PrivacyPolicy from '../pages/PrivacyPolicy';
 
 export default function AppRoutes() {
   return (
@@ -23,6 +24,7 @@ export default function AppRoutes() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/setup-totp" element={<SetupTotp />} />
+        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
 
         <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
         <Route path="/transactions" element={<PrivateRoute><Transactions /></PrivateRoute>} />

@@ -31,7 +31,7 @@ describe('authService', () => {
     prisma.user.findUnique.mockResolvedValue(null);
     prisma.user.create.mockResolvedValue({ id: 1, name: 'Alice', email: 'a@a.com' });
 
-    const result = await registerUser({ name: 'Alice', email: 'a@a.com', password: 'pwd' });
+    const result = await registerUser({ name: 'Alice', email: 'a@a.com', password: 'pwd', consentAccepted: true });
 
     expect(result).toHaveProperty('user');
     expect(result.user).toHaveProperty('id');

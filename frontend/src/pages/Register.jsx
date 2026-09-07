@@ -10,10 +10,13 @@ export default function Register() {
   const {
     register: reg,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting }
   } = useForm();
   const { register } = useAuth();
   const navigate = useNavigate();
+
+  const consentChecked = watch('consentAccepted');
 
   async function onSubmit(values) {
     try {
@@ -87,9 +90,17 @@ export default function Register() {
                 </p>
               )}
             </div>
+
+            <div className="flex items-start gap-3">
+              <input {...reg('consentAccepted')} type="checkbox" id="consentAccepted" />
+              <label htmlFor="consentAccepted" className="text-sm text-slate-600">
+                Li e aceito a <Link to="/privacy-policy" className="text-emerald-600 underline">Política de Privacidade</Link>
+              </label>
+            </div>
+
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={!consentChecked || isSubmitting}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white shadow-md shadow-emerald-500/20 hover:bg-emerald-700 disabled:opacity-60"
             >
               <UserPlus size={16} />

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { me, updateProfile } from '../controllers/userController.js';
+import { me, updateProfile, deleteProfile } from '../controllers/userController.js';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
 
 const router = Router();
@@ -79,5 +79,33 @@ router.get('/me', me);
  *               $ref: '#/components/schemas/Error'
  */
 router.put('/me', updateProfile);
+
+/**
+ * @swagger
+ * /api/users/me:
+ *   delete:
+ *     summary: Delete current user account
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               currentPassword:
+ *                 type: string
+ *                 example: "current_password"
+ *     responses:
+ *       204:
+ *         description: Account deleted
+ *       400:
+ *         description: Bad request
+ *       401:
+ *         description: Unauthorized
+ */
+router.delete('/me', deleteProfile);
 
 export default router;

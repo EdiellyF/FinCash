@@ -1,4 +1,6 @@
 import { prisma } from '../config/db.js';
+import * as bcrypt from 'bcryptjs';
+import { logger } from '../config/logger.js';
 
 export async function getMe(userId) {
   const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -8,7 +10,8 @@ export async function getMe(userId) {
     id: user.id,
     name: user.name,
     email: user.email,
-    avatarUrl: user.avatarUrl
+    avatarUrl: user.avatarUrl,
+    createdAt: user.createdAt
   };
 }
 
@@ -35,4 +38,21 @@ export async function updateMe(userId, data) {
     email: user.email,
     avatarUrl: user.avatarUrl
   };
+}
+
+export async function deleteAccount(userId, currentPassword) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new Error('Usuário não encontrado.');
+
+  const passwordMatches = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!passwordMatches) {
+    logger.warn('Account deletion attempt with invalid password', { userId });
+    throw new Error('Senha atual inválida.');
+  }
+
+  // Perform deletion (onDelete: Cascade in schema should remove related data)
+  await prisma.user.delete({ where: { id: userId } });
+
+  logger.info('User account deleted', { userId });
+  return;
 }

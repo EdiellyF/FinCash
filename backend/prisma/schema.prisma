@@ -27,6 +27,10 @@ model User {
   totpEnabled  Boolean       @default(false) @map("totp_enabled")
   backupCodes  Json?         @map("backup_codes")
 
+  // GDPR / LGPD consent fields
+  consentGivenAt DateTime?   @map("consent_given_at")
+  consentVersion String?     @map("consent_version")
+
   categories   Category[]
   transactions Transaction[]
   goals        Goal[]

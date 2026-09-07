@@ -13,6 +13,7 @@ import goalRoutes from './routes/goalRoutes.js';
 import budgetRoutes from './routes/budgetRoutes.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
+import legalRoutes from './routes/legalRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import statsRoutes from './routes/statsRoutes.js';
 import categorizationRoutes from './routes/categorizationRoutes.js';
@@ -38,7 +39,12 @@ app.use((req, res, next) => {
 app.get('/api/health', (req, res) => res.json({ message: 'API online' }));
 
 // Swagger API Documentation
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+if (env.nodeEnv !== 'production') {
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+} else {
+  // Hide Swagger UI in production
+  app.get('/api-docs', (req, res) => res.status(404).json({ message: 'Not found' }));
+}
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -49,6 +55,7 @@ app.use('/api/goals', goalRoutes);
 app.use('/api/budgets', budgetRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/legal', legalRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/categorization', categorizationRoutes);
