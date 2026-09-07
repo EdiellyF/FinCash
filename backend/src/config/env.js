@@ -22,6 +22,8 @@ export const env = {
   smtpFrom: process.env.SMTP_FROM,
   ollamaApiUrl: process.env.OLLAMA_API_URL || 'http://localhost:11434',
   ollamaModel: process.env.OLLAMA_MODEL || 'llama3.2',
+  // Comma-separated provider priority, e.g. 'groq,gemini,ollama'
+  aiProviderPriority: process.env.AI_PROVIDER_PRIORITY || 'groq,gemini,ollama',
   
   nodeEnv
 };

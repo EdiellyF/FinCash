@@ -20,8 +20,12 @@ const OLLAMA_MODEL = env.ollamaModel || 'llama3.2';
 
 // Limites de requisições (2 total por usuário por dia, somando todos os provedores - otimizado para estudantes)
 const TOTAL_DAILY_LIMIT_PER_USER = 2; // 2 requisições totais por dia para TODOS os provedores
-const GEMINI_DAILY_LIMIT_GLOBAL = 20;
-const GROQ_DAILY_LIMIT_GLOBAL = 100;
+// NOTE: Global provider quotas are intentionally not enforced by the app anymore.
+// The system still records usage in RequestLog for observability, but global
+// counts are not used to block requests. Provider rate-limits returned by the
+// external APIs (e.g. 429 from Gemini/Groq) are still handled and can trigger
+// fallback to other providers.
+
 
 // Modelos disponíveis
 const MODELS = {
@@ -162,22 +166,6 @@ async function checkAndIncrementRequestCount(userId, provider) {
 /**
  * Verifica limite global de um provedor
  */
-async function checkGlobalLimit(provider) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const log = await prisma.requestLog.findUnique({
-    where: {
-      userId_date_provider: {
-        userId: 'global',
-        date: today,
-        provider,
-      },
-    },
-  });
-
-  return log ? log.count : 0;
-}
 
 /**
  * Verifica limite por usuário de um provedor
@@ -223,17 +211,17 @@ async function checkTotalUserRequestCount(userId) {
  * Obtém os limites configurados para cada provedor
  */
 function getProviderLimits(provider) {
+  // Only per-user total limit is enforced by the app. Global provider quotas
+  // are not enforced here; they are recorded for observability.
   const limits = {
     gemini: {
-      global: GEMINI_DAILY_LIMIT_GLOBAL,
       perUser: TOTAL_DAILY_LIMIT_PER_USER, // Usa limite total por usuário
     },
     groq: {
-      global: GROQ_DAILY_LIMIT_GLOBAL,
       perUser: TOTAL_DAILY_LIMIT_PER_USER, // Usa limite total por usuário
     },
   };
-  return limits[provider] || { global: Infinity, perUser: Infinity };
+  return limits[provider] || { perUser: Infinity };
 }
 
 /**
@@ -245,13 +233,11 @@ async function isProviderAvailable(provider, userId) {
   if (provider === 'groq' && !groqClient) return false;
 
   const limits = getProviderLimits(provider);
-  const globalCount = await checkGlobalLimit(provider);
   const totalUserCount = await checkTotalUserRequestCount(userId);
 
-  return (
-    globalCount < limits.global &&
-    totalUserCount < limits.perUser
-  );
+  // Only enforce the per-user total daily limit. Do not block based on any
+  // global provider counters here — global usage is recorded but not enforced.
+  return totalUserCount < limits.perUser;
 }
 
 /**
@@ -542,9 +528,7 @@ Considere o contexto financeiro fornecido para dar dicas específicas.`;
  * Retorna os limites atuais do usuário (2 requisições totais por dia, somando todos os provedores)
  */
 export async function getUserLimits(userId) {
-  const geminiGlobalCount = await checkGlobalLimit('gemini');
   const geminiUserCount = await checkUserLimit(userId, 'gemini');
-  const groqGlobalCount = await checkGlobalLimit('groq');
   const groqUserCount = await checkUserLimit(userId, 'groq');
   const totalUserCount = await checkTotalUserRequestCount(userId);
 
@@ -553,7 +537,6 @@ export async function getUserLimits(userId) {
 
   return {
     combined: {
-      globalLimit: 'ilimitado por provedor',
       userLimit: TOTAL_DAILY_LIMIT_PER_USER,
       userUsed: totalUserCount,
       userRemaining: Math.max(0, TOTAL_DAILY_LIMIT_PER_USER - totalUserCount),
@@ -562,20 +545,16 @@ export async function getUserLimits(userId) {
       limitExceeded: totalUserCount >= TOTAL_DAILY_LIMIT_PER_USER,
     },
     gemini: {
-      globalLimit: GEMINI_DAILY_LIMIT_GLOBAL,
-      globalUsed: geminiGlobalCount,
-      globalRemaining: Math.max(0, GEMINI_DAILY_LIMIT_GLOBAL - geminiGlobalCount),
+      // No global quota exposure for Gemini; only per-user usage is shown
       userUsed: geminiUserCount,
       userPercentage: Math.min(100, geminiUserCount > 0 ? 100 : 0),
-      available: genAI && geminiGlobalCount < GEMINI_DAILY_LIMIT_GLOBAL,
+      available: !!genAI && totalUserCount < TOTAL_DAILY_LIMIT_PER_USER,
     },
     groq: {
-      globalLimit: GROQ_DAILY_LIMIT_GLOBAL,
-      globalUsed: groqGlobalCount,
-      globalRemaining: Math.max(0, GROQ_DAILY_LIMIT_GLOBAL - groqGlobalCount),
+      // No global quota exposure for Groq; only per-user usage is shown
       userUsed: groqUserCount,
       userPercentage: Math.min(100, groqUserCount > 0 ? 100 : 0),
-      available: groqClient && groqGlobalCount < GROQ_DAILY_LIMIT_GLOBAL,
+      available: !!groqClient && totalUserCount < TOTAL_DAILY_LIMIT_PER_USER,
     },
   };
 }
@@ -616,34 +595,67 @@ ${context.recentTransactions.map(t => `- ${t.type === 'income' ? 'Receita' : 'De
       .map(msg => `${msg.role === 'user' ? 'Usuário' : 'Assistente'}: ${msg.content}`)
       .join('\n');
 
-    // Selecionar o melhor provedor disponível
-    const provider = await selectBestProvider(userId);
-    console.log(`[FinCash AI] Provedor selecionado: ${provider}`);
+    // Provider priority is configurable via environment variable AI_PROVIDER_PRIORITY (comma-separated)
+    const providerPriority = (env.aiProviderPriority || 'groq,gemini,ollama').split(',').map(p => p.trim()).filter(Boolean);
+    let response = null;
+    let usedProvider = null;
 
-    let response;
-    switch (provider) {
-      case 'groq':
-        response = await generateWithGroq(contextText, historyText, userMessage);
-        break;
-      case 'gemini':
-        response = await generateWithGemini(contextText, historyText, userMessage);
-        break;
-      case 'ollama':
-      default:
-        response = await generateWithOllama(contextText, historyText, userMessage);
-        break;
+    function isRateLimitError(err) {
+      if (!err) return false;
+      if (err.status === 429) return true;
+      if (err.response && err.response.status === 429) return true;
+      const msg = String(err.message || err).toLowerCase();
+      if (msg.includes('429') || msg.includes('too many requests') || msg.includes('rate limit')) return true;
+      return false;
+    }
+
+    for (const candidate of providerPriority) {
+      // Skip candidate if client not configured or per-user total limit reached
+      if (candidate === 'groq' && !groqClient) continue;
+      if (candidate === 'gemini' && !genAI) continue;
+
+      // if user exhausted total daily quota, don't attempt providers
+      const totalUserCount = await checkTotalUserRequestCount(userId);
+      if (totalUserCount >= TOTAL_DAILY_LIMIT_PER_USER) break;
+
+      try {
+        if (candidate === 'groq') {
+          response = await generateWithGroq(contextText, historyText, userMessage);
+        } else if (candidate === 'gemini') {
+          response = await generateWithGemini(contextText, historyText, userMessage);
+        } else {
+          response = await generateWithOllama(contextText, historyText, userMessage);
+        }
+
+        usedProvider = candidate;
+        break; // success
+      } catch (err) {
+        // If rate limited by provider, log and try next provider. For non-rate errors
+        // also try next provider to be resilient.
+        console.warn(`[FinCash AI] Provider ${candidate} failed:`, err?.message || err);
+        if (isRateLimitError(err)) {
+          console.warn(`[FinCash AI] Provider ${candidate} reported rate limit (429). Trying next provider if available.`);
+        }
+        // continue loop to try next provider
+      }
+    }
+
+    if (!response) {
+      // All providers failed — return generic advice
+      return getGenericAdvice();
     }
 
     // Salvar no cache (1 hora para respostas comuns, 24h para análises completas)
     const ttl = userMessage.includes('análise completa') || userMessage.includes('visão geral') ? 86400 : 3600;
-    
 
-    // Incrementar contador por usuário
-    await checkAndIncrementRequestCount(userId, provider);
+    // Incrementar contador por usuário apenas para o provedor que foi usado
+    if (usedProvider) {
+      await checkAndIncrementRequestCount(userId, usedProvider);
 
-    // Incrementar contador global para provedores pagos
-    if (provider !== 'ollama') {
-      await checkAndIncrementRequestCount('global', provider);
+      // Incrementar contador global para provedores pagos (registro apenas)
+      if (usedProvider !== 'ollama') {
+        await checkAndIncrementRequestCount('global', usedProvider);
+      }
     }
 
     return response;
