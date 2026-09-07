@@ -4,23 +4,22 @@ import { useAuth } from '../hooks/useAuth';
 import { toast } from 'sonner';
 import { TrendingUp, UserPlus } from 'lucide-react';
 import validator from 'validator';
-import api from '../services/api';
 
 export default function Register() {
   const {
     register: reg,
     handleSubmit,
-    watch,
     formState: { errors, isSubmitting }
-  } = useForm();
+  } = useForm({
+    defaultValues: {
+      consentAccepted: false
+    }
+  });
   const { register } = useAuth();
   const navigate = useNavigate();
 
-  const consentChecked = watch('consentAccepted');
-
   async function onSubmit(values) {
     try {
-      // use AuthContext.register which now returns data including totpUri and backupCodes
       const result = await register(values);
 
       toast.success('Conta criada. Configure o TOTP e salve seus códigos de backup.');
@@ -32,9 +31,12 @@ export default function Register() {
         }
       });
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Erro ao criar conta.');
+      toast.error(error.response?.data?.message || 'Não foi possível criar a conta. Tente novamente.');
     }
   }
+
+
+  const inputClass = "w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white";
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-100 to-emerald-50 p-4 dark:from-slate-950 dark:to-slate-900">
@@ -51,57 +53,67 @@ export default function Register() {
           <h2 className="mb-6 text-xl font-bold text-slate-900 dark:text-white">Criar conta</h2>
           <div className="space-y-4">
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-500">Nome completo</label>
-              <input {...reg('name')} placeholder="Seu nome" required />
+              <label htmlFor="name" className="mb-1 block text-xs font-semibold text-slate-500">Nome completo</label>
+              <input 
+                id="name"
+                className={inputClass}
+                {...reg('name', { required: 'Informe seu nome completo.' })} 
+                placeholder="Seu nome" 
+              />
+              {errors.name && <p className="mt-1 text-sm text-red-500">{errors.name.message}</p>}
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-500">E-mail</label>
+              <label htmlFor="email" className="mb-1 block text-xs font-semibold text-slate-500">E-mail</label>
               <input
+                id="email"
+                className={inputClass}
                 {...reg('email', {
-                  required: 'E-mail obrigatório',
+                  required: 'Informe seu e-mail.',
                   validate: (value) =>
-                    validator.isEmail(value) || 'Digite um e-mail válido',
+                    validator.isEmail(value) || 'Informe um e-mail válido.',
                 })}
                 type="email"
                 placeholder="seu@email.com"
               />
-              {errors.email && (
-                <p className="mt-1 text-sm text-red-500">
-                  {errors.email.message}
-                </p>
-              )}
+              {errors.email && <p className="mt-1 text-sm text-red-500">{errors.email.message}</p>}
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-500">Senha</label>
+              <label htmlFor="password" className="mb-1 block text-xs font-semibold text-slate-500">Senha</label>
               <input
+                id="password"
+                className={inputClass}
                 {...reg('password', {
-                  required: 'Senha obrigatória',
+                  required: 'Crie uma senha.',
                   minLength: {
                     value: 6,
-                    message: 'A senha deve ter no mínimo 6 caracteres'
+                    message: 'A senha precisa ter pelo menos 6 caracteres.'
                   }
                 })}
                 type="password"
                 placeholder="Mínimo 6 caracteres"
               />
-              {errors.password && (
-                <p className="mt-1 text-sm text-red-500">
-                  {errors.password.message}
-                </p>
-              )}
+              {errors.password && <p className="mt-1 text-sm text-red-500">{errors.password.message}</p>}
             </div>
 
-            <div className="flex items-start gap-3">
-              <input {...reg('consentAccepted')} type="checkbox" id="consentAccepted" />
-              <label htmlFor="consentAccepted" className="text-sm text-slate-600">
-                Li e aceito a <Link to="/privacy-policy" className="text-emerald-600 underline">Política de Privacidade</Link>
-              </label>
+            <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800">
+              <input
+                {...reg('consentAccepted', { required: 'Você precisa aceitar a Política de Privacidade para continuar.' })}
+                type="checkbox"
+                id="consentAccepted"
+                className="mt-1 h-4 w-4 shrink-0 accent-emerald-600"
+              />
+              <div className="flex flex-col">
+                <label htmlFor="consentAccepted" className="text-sm text-slate-600 dark:text-slate-300">
+                  Li e aceito a <Link to="/privacy-policy" className="text-emerald-600 underline">Política de Privacidade</Link>
+                </label>
+                {errors.consentAccepted && <p className="mt-1 text-xs text-red-500">{errors.consentAccepted.message}</p>}
+              </div>
             </div>
 
             <button
               type="submit"
-              disabled={!consentChecked || isSubmitting}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white shadow-md shadow-emerald-500/20 hover:bg-emerald-700 disabled:opacity-60"
+              disabled={isSubmitting}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white shadow-md shadow-emerald-500/20 hover:bg-emerald-700 disabled:opacity-60 transition-colors"
             >
               <UserPlus size={16} />
               {isSubmitting ? 'Criando conta...' : 'Criar conta'}
