@@ -191,41 +191,62 @@ POST /api/categorization/auto/:transactionId
 
 ### 3. Sistema de Limites e Gestão de Recursos
 
-#### Estrutura de Limites
+#### Estrutura de Limites (atual)
 
 ```javascript
 // Limite Total por Usuário (somando TODOS os provedores)
 const TOTAL_DAILY_LIMIT_PER_USER = 2; // 2 requisições totais por dia para estudantes
-
-// Limites Globais (para todos os usuários, por provedor)
-const GEMINI_DAILY_LIMIT_GLOBAL = 20;
-const GROQ_DAILY_LIMIT_GLOBAL = 100;
 ```
 
-#### 🎓 Otimizado para Estudantes
+Observação importante: o FinCash registra o uso global por provedor (RequestLog) para observabilidade e auditoria, mas não aplica mais um bloqueio automático baseado em contadores globais (por exemplo, um contador "global" para Gemini ou Groq). A aplicação continua a:
+- Enforcear o limite TOTAL por usuário (TOTAL_DAILY_LIMIT_PER_USER)
+- Registrar todas as requisições em `request_logs` (incluindo linhas com userId = 'global') para monitoramento
+- Tentar provedores em ordem de prioridade e fazer fallback quando um provedor falhar (incluindo erros 429 de rate-limit)
 
-O sistema FinCash foi otimizado especificamente para estudantes universitários de Palmas/TO com o seguinte limite:
+#### 🎓 Otimizado para Estudantes (relembrando)
+
 - **2 requisições totais por usuário por dia** (somando todos os provedores: GROQ, Gemini, Ollama)
-- Isto significa que um estudante pode fazer até 2 consultas completas de análise financeira por dia
-- Objetivo: Garantir acesso equitativo e sustentável para toda a comunidade universitária
+- Objetivo: garantir acesso equitativo e sustentável para toda a comunidade universitária
 
-#### Fluxo de Controle de Limites
+#### Fluxo de Controle (atual)
 
 ```
 Requisição do Usuário
          ↓
 Verificar Limite Total por Usuário (2/dia)
          ↓
-Verificar Limite Global por Provedor
+Selecionar Provedor conforme prioridade configurada
          ↓
-Selecionar Provedor Disponível
+Executar Requisição no provedor escolhido
          ↓
-Executar Requisição
+Se provedor falhar (incluindo 429), tentar próximo provedor
          ↓
-Incrementar Contadores
+Incrementar contador de uso para o provedor efetivamente usado
          ↓
-Retornar Requisições Restantes
+Retornar resposta ao usuário (ou fallback genérico se todos falharem)
 ```
+
+#### Configuração da prioridade de provedores
+
+A prioridade (ordem) dos provedores AI pode ser configurada via variável de ambiente `AI_PROVIDER_PRIORITY`. Valor padrão: `groq,gemini,ollama`.
+
+Exemplos:
+
+```bash
+# Priorizar Gemini sobre Groq
+AI_PROVIDER_PRIORITY='gemini,groq,ollama'
+
+# Somente usar Gemini e Ollama (ignorar Groq)
+AI_PROVIDER_PRIORITY='gemini,ollama'
+```
+
+No código, essa variável é lida em `src/config/env.js` como `aiProviderPriority` e aplicada ao serviço de AI para definir a ordem de tentativa.
+
+#### Tratamento de rate-limits (429) e fallback
+
+- Se um provedor retornar um erro de rate-limit (HTTP 429) ou outros erros transitórios, o serviço registrará o erro e tentará o próximo provedor na lista de prioridade.
+- Se todos os provedores falharem (incluindo retorno de 429), o sistema oferece um fallback genérico (`getGenericAdvice()`) para não quebrar a experiência do usuário.
+- Mensagens ao usuário: quando o provedor recusa por excesso de requisições, o backend tenta um fallback — se houver erro fatal (ex.: autenticação inválida) o erro é retornado ao cliente com mensagem legível.
 
 #### Endpoints de Gestão de Limites
 
@@ -233,7 +254,7 @@ Retornar Requisições Restantes
 GET /api/chat/limits
 ```
 
-**Response**
+**Response (exemplo atual, sem exposição de limites globais)**
 ```json
 {
   "success": true,
@@ -247,20 +268,85 @@ GET /api/chat/limits
       "limitExceeded": false
     },
     "gemini": {
-      "globalLimit": 20,
-      "globalUsed": 15,
-      "globalRemaining": 5,
+      "userUsed": 0,
+      "userPercentage": 0,
       "available": true
     },
     "groq": {
-      "globalLimit": 100,
-      "globalUsed": 45,
-      "globalRemaining": 55,
+      "userUsed": 1,
+      "userPercentage": 100,
       "available": true
     }
   }
 }
 ```
+
+---
+
+#### Observability: consultas SQL úteis e alerta de exemplo
+
+A tabela Prisma `RequestLog` (mapeada para `request_logs`) registra o uso por `user_id`, `date`, `provider` e `count`. Seguem consultas úteis para monitoramento e um exemplo de alerta.
+
+1) Total diário por provedor (hoje):
+
+```sql
+SELECT provider, SUM(count) AS total_today
+FROM request_logs
+WHERE date = CURRENT_DATE
+GROUP BY provider
+ORDER BY total_today DESC;
+```
+
+2) Percentual do limite (exemplo: se a cota do provedor for 1500/dia — ajuste conforme o provedor):
+
+```sql
+-- Substitua 1500 pelo quota real do provedor
+SELECT provider,
+       SUM(count) AS total_today,
+       (SUM(count)::float / 1500.0) * 100.0 AS percent_of_quota
+FROM request_logs
+WHERE date = CURRENT_DATE
+GROUP BY provider;
+```
+
+3) Alerta SQL/Grafana (regra exemplo)
+
+- Objetivo: alertar quando o uso diário de um provedor ultrapassar 80% da cota conhecida.
+- Substitua `<PROVIDER_QUOTA>` pelo número real (ex.: 1500 para Gemini Flash 2026).
+
+```sql
+-- Regra exemplo que pode ser usada em Grafana/SQL alerting
+SELECT provider, SUM(count) AS total_today
+FROM request_logs
+WHERE date = CURRENT_DATE
+GROUP BY provider
+HAVING SUM(count) > 0.8 * <PROVIDER_QUOTA>;
+```
+
+Se essa consulta retornar linhas, significa que o provedor atingiu mais de 80% da cota naquele dia e deve disparar um alerta para a equipe.
+
+4) Exemplo Prometheus alert (se exportar métricas do request log):
+
+```yaml
+# alert: HighAIProviderUsage
+expr: fincash_requestlog_total{provider="gemini",job="requestlog_exporter"} > 0.8 * 1500
+for: 5m
+labels:
+  severity: warning
+annotations:
+  summary: "Uso alto do provedor Gemini ({{ $labels.provider }})"
+  description: "Uso diário atual supera 80% da cota conhecida. Verifique chaves, erros e aumente cota se necessário."
+```
+
+---
+
+#### Recomendações operacionais
+
+- Configure `AI_PROVIDER_PRIORITY` no ambiente de produção conforme SLA/custos e disponibilidade de cada provedor.
+- Não usar mais blocos automáticos baseados em contadores globais — use monitoramento e alertas para agir manualmente ou ajustar quotas.
+- Configure alertas (Grafana/Prometheus) com thresholds baseados nas cotas reais de cada provedor (ex.: 80%/90%).
+- Considere adicionar um painel de observabilidade no Grafana com métricas diárias por `provider`, `user` e histórico das últimas 7/30 dias.
+
 
 ---
 
