@@ -47,11 +47,20 @@ export default function Profile() {
     }
 
     try {
-      await api.delete('/users/me', { data: { currentPassword } });
+      const token = localStorage.getItem('finance_token');
+      if (!token) {
+        toast.error('Token de autenticação não encontrado. Faça login novamente.');
+        return;
+      }
+
+      // Pass Authorization header explicitly as a fallback in case interceptor is not firing
+      await api.delete('/users/me', { data: { currentPassword }, headers: { Authorization: 'Bearer ' + token } });
       toast.success('Conta excluída com sucesso.');
       logout();
       navigate('/login');
     } catch (err) {
+      // Provide more detailed error for debugging
+      console.error('Erro ao chamar DELETE /users/me:', err);
       toast.error(err.response?.data?.message || 'Erro ao excluir conta.');
     }
   }
