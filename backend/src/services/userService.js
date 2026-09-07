@@ -1,7 +1,27 @@
 import { prisma } from '../config/db.js';
-import * as bcrypt from 'bcryptjs';
+import bcrypt from 'bcryptjs';
 import { logger } from '../config/logger.js';
 import { AuthenticationError, NotFoundError } from '../utils/errors.js';
+
+// Compatibility wrapper: some bundlers/exports can expose bcrypt under default or named exports.
+async function comparePassword(plain, hash) {
+  if (!hash) return false;
+  // Prefer async compare when available
+  if (typeof bcrypt.compare === 'function') {
+    return bcrypt.compare(plain, hash);
+  }
+  if (bcrypt && typeof bcrypt.default === 'object' && typeof bcrypt.default.compare === 'function') {
+    return bcrypt.default.compare(plain, hash);
+  }
+  // Fallback to sync compare if async not available
+  if (typeof bcrypt.compareSync === 'function') {
+    return Promise.resolve(bcrypt.compareSync(plain, hash));
+  }
+  if (bcrypt && typeof bcrypt.default === 'object' && typeof bcrypt.default.compareSync === 'function') {
+    return Promise.resolve(bcrypt.default.compareSync(plain, hash));
+  }
+  throw new Error('bcrypt compare function not available in this environment');
+}
 
 export async function getMe(userId) {
   const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -51,7 +71,7 @@ export async function deleteAccount(userId, currentPassword) {
     throw new AuthenticationError('Senha atual inválida.');
   }
 
-  const passwordMatches = await bcrypt.compare(currentPassword, user.passwordHash);
+  const passwordMatches = await comparePassword(currentPassword, user.passwordHash);
   if (!passwordMatches) {
     logger.warn('Account deletion attempt with invalid password', { userId });
     throw new AuthenticationError('Senha atual inválida.');
