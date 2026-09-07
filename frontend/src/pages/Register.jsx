@@ -97,7 +97,9 @@ export default function Register() {
 
             <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800">
               <input
-                {...reg('consentAccepted')}
+                {...reg('consentAccepted', {
+                  setValueAs: (value) => value === true || value === 'true' || value === 'on'
+                })}
                 type="checkbox"
                 id="consentAccepted"
                 className="mt-1 h-5 w-5 shrink-0 cursor-pointer rounded border border-slate-300 bg-white accent-emerald-600"
