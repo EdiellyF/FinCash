@@ -63,7 +63,7 @@ describe('Privacy and consent compliance', () => {
     expect(result).toHaveProperty('refreshToken');
   });
 
-  it('registers with consent and sets consent fields', async () => {
+  it('does not write consent fields even if consentAccepted provided', async () => {
     prisma.user.findUnique.mockResolvedValue(null);
     prisma.user.create.mockResolvedValue({ id: 'u1', name: 'A', email: 'a@a.com' });
 
@@ -71,8 +71,8 @@ describe('Privacy and consent compliance', () => {
 
     expect(prisma.user.create).toHaveBeenCalled();
     const callData = prisma.user.create.mock.calls[0][0].data;
-    expect(callData.consentVersion).toBe('1.0');
-    expect(callData.consentGivenAt).toBeInstanceOf(Date);
+    expect(callData.consentVersion).toBeUndefined();
+    expect(callData.consentGivenAt).toBeUndefined();
     expect(result).toHaveProperty('accessToken');
     expect(result).toHaveProperty('refreshToken');
   });

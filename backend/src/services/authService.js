@@ -7,8 +7,6 @@ import * as otplib from 'otplib';
 import crypto from 'crypto';
 import { env } from '../config/env.js';
 
-// Consent policy version used when registering users
-const CONSENT_VERSION = '1.0';
 
 // Normalize bcrypt import shape to support both runtime (default export) and test mocks
 const bcryptLib = (function () {
@@ -191,7 +189,6 @@ export async function registerUser(data) {
     throw new ConflictError('E-mail já cadastrado.');
   }
 
-  const consentAccepted = data?.consentAccepted === true;
   const passwordHash = await bcryptLib.hash(data.password, 10);
 
   // generate TOTP secret and backup codes
@@ -209,10 +206,6 @@ export async function registerUser(data) {
       totpSecret: secret,
       totpEnabled: false,
       backupCodes: hashedBackupCodes,
-      ...(consentAccepted ? {
-        consentGivenAt: new Date(),
-        consentVersion: CONSENT_VERSION
-      } : {})
     }
   });
 
