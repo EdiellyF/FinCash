@@ -45,6 +45,12 @@ export async function deleteAccount(userId, currentPassword) {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new NotFoundError('Usuário não encontrado.');
 
+  // If user doesn't have a password hash (e.g. OAuth-only account), treat as invalid password
+  if (!user.passwordHash) {
+    logger.warn('Account deletion attempt for user without password hash', { userId });
+    throw new AuthenticationError('Senha atual inválida.');
+  }
+
   const passwordMatches = await bcrypt.compare(currentPassword, user.passwordHash);
   if (!passwordMatches) {
     logger.warn('Account deletion attempt with invalid password', { userId });
