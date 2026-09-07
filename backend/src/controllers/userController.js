@@ -34,6 +34,6 @@ export async function deleteProfile(req, res) {
     }
 
     // Generic 500 without leaking internals
-    return res.status(500).json({ message: 'Erro interno ao excluir conta. Verifique os logs e entre em contato com o suporte.' });
+    return res.status(500).json({ message: 'Erro interno ao excluir conta. Entre em contato com o suporte.' });
   }
 }
