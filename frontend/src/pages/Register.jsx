@@ -100,11 +100,11 @@ export default function Register() {
                 {...reg('consentAccepted', { required: 'Você precisa aceitar a Política de Privacidade para continuar.' })}
                 type="checkbox"
                 id="consentAccepted"
-                className="mt-1 h-4 w-4 shrink-0 accent-emerald-600"
+                className="mt-1 h-5 w-5 shrink-0 cursor-pointer rounded border border-slate-300 bg-white accent-emerald-600"
               />
               <div className="flex flex-col">
-                <label htmlFor="consentAccepted" className="text-sm text-slate-600 dark:text-slate-300">
-                  Li e aceito a <Link to="/privacy-policy" className="text-emerald-600 underline">Política de Privacidade</Link>
+                <label htmlFor="consentAccepted" className="cursor-pointer text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Li e aceito a <Link to="/privacy-policy" className="font-semibold text-emerald-600 underline">Política de Privacidade</Link>
                 </label>
                 {errors.consentAccepted && <p className="mt-1 text-xs text-red-500">{errors.consentAccepted.message}</p>}
               </div>
