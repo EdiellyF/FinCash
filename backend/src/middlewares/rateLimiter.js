@@ -54,7 +54,7 @@ export function rateLimiter(maxRequests = 5, windowMs = 60000) {
       next();
     } catch (error) {
       logger.error('Rate limiter error', { error: error.message, userId: req.user?.id });
-      // Em caso de erro, permitir a requisição (fail-open)
+     
       next();
     }
   };
