@@ -191,12 +191,7 @@ export async function registerUser(data) {
     throw new ConflictError('E-mail já cadastrado.');
   }
 
-  // Require explicit consent acceptance for privacy policy
-  if (!data || data.consentAccepted !== true) {
-    logger.warn('Registration attempt without consent', { email: data?.email });
-    throw new ValidationError('É necessário aceitar a política de privacidade para se cadastrar.');
-  }
-
+  const consentAccepted = data?.consentAccepted === true;
   const passwordHash = await bcryptLib.hash(data.password, 10);
 
   // generate TOTP secret and backup codes
@@ -214,8 +209,10 @@ export async function registerUser(data) {
       totpSecret: secret,
       totpEnabled: false,
       backupCodes: hashedBackupCodes,
-      consentGivenAt: new Date(),
-      consentVersion: CONSENT_VERSION
+      ...(consentAccepted ? {
+        consentGivenAt: new Date(),
+        consentVersion: CONSENT_VERSION
+      } : {})
     }
   });
 

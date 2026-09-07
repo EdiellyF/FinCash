@@ -49,9 +49,18 @@ beforeEach(() => {
 });
 
 describe('Privacy and consent compliance', () => {
-  it('rejects registration without consentAccepted=true', async () => {
+  it('allows registration without consentAccepted=true', async () => {
     prisma.user.findUnique.mockResolvedValue(null);
-    await expect(registerUser({ name: 'A', email: 'a@a.com', password: 'pwd' })).rejects.toBeInstanceOf(ValidationError);
+    prisma.user.create.mockResolvedValue({ id: 'u1', name: 'A', email: 'a@a.com' });
+
+    const result = await registerUser({ name: 'A', email: 'a@a.com', password: 'pwd' });
+
+    expect(prisma.user.create).toHaveBeenCalled();
+    const callData = prisma.user.create.mock.calls[0][0].data;
+    expect(callData.consentVersion).toBeUndefined();
+    expect(callData.consentGivenAt).toBeUndefined();
+    expect(result).toHaveProperty('accessToken');
+    expect(result).toHaveProperty('refreshToken');
   });
 
   it('registers with consent and sets consent fields', async () => {
