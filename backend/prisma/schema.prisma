@@ -31,13 +31,30 @@ model User {
   consentGivenAt DateTime?   @map("consent_given_at")
   consentVersion String?     @map("consent_version")
 
-  categories   Category[]
-  transactions Transaction[]
-  goals        Goal[]
-  budgets      Budget[]
-  chatMessages ChatMessage[]
+  categories     Category[]
+  transactions   Transaction[]
+  goals          Goal[]
+  budgets        Budget[]
+  chatMessages   ChatMessage[]
+  refreshTokens  RefreshToken[]
 
   @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  // TODO: add a periodic cleanup job for expired/revoked refresh tokens in a background task.
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("refresh_tokens")
 }
 
 model PendingUser {

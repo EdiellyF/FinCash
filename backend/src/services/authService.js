@@ -1,6 +1,6 @@
 import * as bcrypt from 'bcryptjs';
 import { prisma } from '../config/db.js';
-import { generateToken } from '../utils/generateToken.js';
+import { generateAccessToken, generateRefreshToken } from '../utils/generateToken.js';
 import { ConflictError, AuthenticationError, NotFoundError, ValidationError } from '../utils/errors.js';
 import { logger } from '../config/logger.js';
 import * as otplib from 'otplib';
@@ -139,6 +139,51 @@ function generatePlainBackupCodes(count = 8) {
   return codes;
 }
 
+async function issueUserTokens(userId) {
+  const accessToken = generateAccessToken(userId);
+  const refreshToken = await generateRefreshToken(userId);
+  return { accessToken, refreshToken };
+}
+
+async function findRefreshTokenRecordByValue(rawRefreshToken) {
+  if (!rawRefreshToken) return null;
+
+  const records = await prisma.refreshToken.findMany({});
+
+  for (const record of records) {
+    const matches = await bcryptLib.compare(rawRefreshToken, record.tokenHash);
+    if (matches) return record;
+  }
+
+  return null;
+}
+
+async function revokeAllRefreshTokensForUser(userId) {
+  await prisma.refreshToken.updateMany({
+    where: { userId },
+    data: { revokedAt: new Date() }
+  });
+}
+
+async function findValidRefreshTokenRecord(rawRefreshToken) {
+  if (!rawRefreshToken) return null;
+
+  const now = new Date();
+  const records = await prisma.refreshToken.findMany({
+    where: {
+      revokedAt: null,
+      expiresAt: { gt: now }
+    }
+  });
+
+  for (const record of records) {
+    const matches = await bcryptLib.compare(rawRefreshToken, record.tokenHash);
+    if (matches) return record;
+  }
+
+  return null;
+}
+
 export async function registerUser(data) {
   const existing = await prisma.user.findUnique({ where: { email: data.email } });
   if (existing) {
@@ -176,8 +221,16 @@ export async function registerUser(data) {
 
   logger.info('New user registered (TOTP)', { userId: user.id, result: 'success' });
 
+  const tokens = await issueUserTokens(user.id);
+
   // Return the otpauth URI and the plaintext backup codes ONCE
-  return { user: publicUser(user), token: generateToken(user.id), totpUri, backupCodes: plainBackupCodes };
+  return {
+    user: publicUser(user),
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    totpUri,
+    backupCodes: plainBackupCodes
+  };
 }
 
 export async function confirmTotp(emailOrId, token) {
@@ -226,7 +279,8 @@ export async function loginUser(data) {
 
   logger.info('User logged in successfully', { userId: user.id, result: 'success' });
 
-  return { user: publicUser(user), token: generateToken(user.id) };
+  const tokens = await issueUserTokens(user.id);
+  return { user: publicUser(user), accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
 }
 
 export async function backupLogin(email, backupCode) {
@@ -257,7 +311,57 @@ export async function backupLogin(email, backupCode) {
   await prisma.user.update({ where: { email }, data: { backupCodes: newCodes } });
 
   logger.info('User logged in with backup code', { userId: user.id, result: 'success' });
-  return { user: publicUser(user), token: generateToken(user.id) };
+  const tokens = await issueUserTokens(user.id);
+  return { user: publicUser(user), accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
+}
+
+export async function refreshUserSession(refreshToken) {
+  if (!refreshToken) {
+    throw new AuthenticationError('Refresh token não informado.');
+  }
+
+  const matchedRecord = await findRefreshTokenRecordByValue(refreshToken);
+  if (!matchedRecord) {
+    throw new AuthenticationError('Refresh token inválido, expirado ou revogado.');
+  }
+
+  const isExpired = matchedRecord.expiresAt <= new Date();
+  if (matchedRecord.revokedAt || isExpired) {
+    await revokeAllRefreshTokensForUser(matchedRecord.userId);
+    logger.warn('Refresh token reuse detected; invalidating all user refresh tokens', { userId: matchedRecord.userId });
+    throw new AuthenticationError('Refresh token inválido, expirado ou revogado.');
+  }
+
+  await prisma.refreshToken.update({
+    where: { id: matchedRecord.id },
+    data: { revokedAt: new Date() }
+  });
+
+  const accessToken = generateAccessToken(matchedRecord.userId);
+  const nextRefreshToken = await generateRefreshToken(matchedRecord.userId);
+
+  logger.info('Refresh token rotated successfully', { userId: matchedRecord.userId });
+  return { accessToken, refreshToken: nextRefreshToken };
+}
+
+export async function logoutUser(userId, refreshToken) {
+  if (refreshToken) {
+    const matchingRecord = await findRefreshTokenRecordByValue(refreshToken);
+    if (matchingRecord && matchingRecord.userId === userId) {
+      await prisma.refreshToken.update({
+        where: { id: matchingRecord.id },
+        data: { revokedAt: new Date() }
+      });
+      return { success: true };
+    }
+  }
+
+  await prisma.refreshToken.updateMany({
+    where: { userId, revokedAt: null },
+    data: { revokedAt: new Date() }
+  });
+
+  return { success: true };
 }
 
 export async function generateNewBackupCodesForUserId(userId) {

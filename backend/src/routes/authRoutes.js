@@ -3,6 +3,7 @@ import {
   forgotPasswordController,
   login,
   logout,
+  refresh,
   register,
   resetPasswordController,
   totpConfirmController,
@@ -11,9 +12,12 @@ import {
 } from '../controllers/authController.js';
 import { validate } from '../middlewares/validateMiddleware.js';
 import { rateLimiter } from '../middlewares/rateLimiter.js';
+import { authMiddleware } from '../middlewares/authMiddleware.js';
 import {
   forgotPasswordSchema,
   loginSchema,
+  logoutSchema,
+  refreshTokenSchema,
   registerSchema,
   resetPasswordSchema,
   totpConfirmSchema,
@@ -121,6 +125,7 @@ router.post('/totp/reset', validate(totpResetSchema), resetTotpController);
  *               $ref: '#/components/schemas/Error'
  */
 router.post('/login', rateLimiter(5, 60000), validate(loginSchema), login);
+router.post('/refresh', rateLimiter(5, 60000), validate(refreshTokenSchema), refresh);
 
 /**
  * @swagger
@@ -144,7 +149,7 @@ router.post('/login', rateLimiter(5, 60000), validate(loginSchema), login);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/logout', logout);
+router.post('/logout', authMiddleware, validate(logoutSchema), logout);
 
 /**
  * @swagger

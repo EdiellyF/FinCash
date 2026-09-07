@@ -7,7 +7,9 @@ import {
   confirmTotp,
   backupLogin,
   generateNewBackupCodesForUserId,
-  resetTotpForUser
+  resetTotpForUser,
+  refreshUserSession,
+  logoutUser
 } from '../services/authService.js';
 import { ValidationError, NotFoundError, ConflictError } from '../utils/errors.js';
 import { logger } from '../config/logger.js';
@@ -28,8 +30,17 @@ export async function login(req, res) {
 }
 
 export async function logout(req, res) {
-  logger.info('User logout', { userId: req.user.id });
+  const refreshToken = req.validatedData?.refreshToken;
+  logger.info('User logout', { userId: req.user.id, refreshTokenProvided: !!refreshToken });
+  await logoutUser(req.user.id, refreshToken);
   return ok(res, null, 'Logout realizado com sucesso.');
+}
+
+export async function refresh(req, res) {
+  const { refreshToken } = req.validatedData;
+  logger.info('Refresh token rotation attempt', { refreshTokenProvided: !!refreshToken });
+  const result = await refreshUserSession(refreshToken);
+  return ok(res, result, 'Token renovado com sucesso.');
 }
 
 export async function forgotPasswordController(req, res) {

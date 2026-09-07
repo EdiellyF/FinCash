@@ -47,7 +47,7 @@ export default function Profile() {
     }
 
     try {
-      const token = localStorage.getItem('finance_token');
+      const token = localStorage.getItem('finance_access_token');
       if (!token) {
         toast.error('Token de autenticação não encontrado. Faça login novamente.');
         return;

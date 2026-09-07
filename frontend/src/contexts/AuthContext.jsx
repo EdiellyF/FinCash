@@ -16,24 +16,29 @@ export function AuthProvider({ children }) {
   async function register(payload) {
     const resp = await api.post('/auth/register', payload);
     const data = resp.data.data;
-    localStorage.setItem('finance_token', data.token);
+    localStorage.setItem('finance_access_token', data.accessToken);
+    localStorage.setItem('finance_refresh_token', data.refreshToken);
     localStorage.setItem('finance_user', JSON.stringify(data.user));
     setUser(data.user);
-    return data; // return data so caller can access totpUri and backupCodes
+    return data;
   }
 
   async function login(payload) {
     const { data } = await api.post('/auth/login', payload);
-    localStorage.setItem('finance_token', data.data.token);
-    localStorage.setItem('finance_user', JSON.stringify(data.data.user));
-    setUser(data.data.user);
+    const authData = data.data;
+    localStorage.setItem('finance_access_token', authData.accessToken);
+    localStorage.setItem('finance_refresh_token', authData.refreshToken);
+    localStorage.setItem('finance_user', JSON.stringify(authData.user));
+    setUser(authData.user);
   }
 
   async function backupLogin(payload) {
     const { data } = await api.post('/auth/totp/backup-login', payload);
-    localStorage.setItem('finance_token', data.data.token);
-    localStorage.setItem('finance_user', JSON.stringify(data.data.user));
-    setUser(data.data.user);
+    const authData = data.data;
+    localStorage.setItem('finance_access_token', authData.accessToken);
+    localStorage.setItem('finance_refresh_token', authData.refreshToken);
+    localStorage.setItem('finance_user', JSON.stringify(authData.user));
+    setUser(authData.user);
   }
 
   async function refreshProfile() {
@@ -42,8 +47,19 @@ export function AuthProvider({ children }) {
     setUser(data.data);
   }
 
-  function logout() {
-    localStorage.removeItem('finance_token');
+  async function logout() {
+    const refreshToken = localStorage.getItem('finance_refresh_token');
+
+    try {
+      if (refreshToken) {
+        await api.post('/auth/logout', { refreshToken });
+      }
+    } catch {
+      // Ignora falha de logout no backend, mas limpa sessão local para evitar bloqueio.
+    }
+
+    localStorage.removeItem('finance_access_token');
+    localStorage.removeItem('finance_refresh_token');
     localStorage.removeItem('finance_user');
     setUser(null);
   }
