@@ -10,11 +10,7 @@ export default function Register() {
     register: reg,
     handleSubmit,
     formState: { errors, isSubmitting }
-  } = useForm({
-    defaultValues: {
-      consentAccepted: false
-    }
-  });
+  } = useForm();
   const { register } = useAuth();
   const navigate = useNavigate();
 
@@ -95,21 +91,6 @@ export default function Register() {
               {errors.password && <p className="mt-1 text-sm text-red-500">{errors.password.message}</p>}
             </div>
 
-            <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800">
-              <input
-                {...reg('consentAccepted', {
-                  setValueAs: (value) => value === true || value === 'true' || value === 'on'
-                })}
-                type="checkbox"
-                id="consentAccepted"
-                className="mt-1 h-5 w-5 shrink-0 cursor-pointer rounded border border-slate-300 bg-white accent-emerald-600"
-              />
-              <div className="flex flex-col">
-                <label htmlFor="consentAccepted" className="cursor-pointer text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Li a <Link to="/privacy-policy" className="font-semibold text-emerald-600 underline">Política de Privacidade</Link>
-                </label>
-              </div>
-            </div>
 
             <button
               type="submit"
