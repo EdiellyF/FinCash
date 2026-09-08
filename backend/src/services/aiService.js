@@ -3,6 +3,8 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import Groq from 'groq-sdk';
 import { env } from '../config/env.js';
 import crypto from 'crypto';
+import { logger } from '../config/logger.js';
+import { logSanitizedError } from '../utils/safeLogger.js';
 
 
 
@@ -660,7 +662,7 @@ ${context.recentTransactions.map(t => `- ${t.type === 'income' ? 'Receita' : 'De
 
     return response;
   } catch (error) {
-    console.error('Erro ao gerar dica financeira:', error);
+    logSanitizedError('Erro ao gerar dica financeira', error, { userId });
 
     // Fallback: dicas genéricas baseadas em regras
     return getGenericAdvice();

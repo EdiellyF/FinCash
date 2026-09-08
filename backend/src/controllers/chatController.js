@@ -1,6 +1,8 @@
 import { PrismaClient } from '@prisma/client';
 import { generateFinancialAdvice, getUserLimits, getComparativeContext } from '../services/aiService.js';
 import PDFDocument from 'pdfkit';
+import { logger } from '../config/logger.js';
+import { logSanitizedError, logSanitizedWarn } from '../utils/safeLogger.js';
 
 const prisma = new PrismaClient();
 
@@ -62,7 +64,7 @@ export async function sendMessage(req, res) {
       period,
     });
   } catch (error) {
-    console.error('Erro ao enviar mensagem:', error);
+    logSanitizedError('Erro ao enviar mensagem', error, { userId: req?.user?.id });
     res.status(500).json({ message: 'Erro ao processar mensagem.' });
   }
 }
@@ -80,7 +82,7 @@ export async function getHistory(req, res) {
 
     res.json(messages);
   } catch (error) {
-    console.error('Erro ao buscar histórico:', error);
+    logSanitizedError('Erro ao buscar histórico', error, { userId: req?.user?.id });
     res.status(500).json({ message: 'Erro ao buscar histórico.' });
   }
 }
@@ -91,7 +93,7 @@ export async function getLimits(req, res) {
     const limits = await getUserLimits(userId);
     res.json(limits);
   } catch (error) {
-    console.error('Erro ao buscar limites:', error);
+    logSanitizedError('Erro ao buscar limites', error, { userId: req?.user?.id });
     res.status(500).json({ message: 'Erro ao buscar limites.' });
   }
 }
@@ -162,7 +164,7 @@ export async function exportToPdf(req, res) {
 
     doc.end();
   } catch (error) {
-    console.error('Erro ao exportar PDF:', error);
+    logSanitizedError('Erro ao exportar PDF', error, { userId: req?.user?.id });
     res.status(500).json({ message: 'Erro ao exportar PDF.' });
   }
 }
@@ -176,7 +178,7 @@ export async function comparePeriods(req, res) {
 
     res.json(comparativeData);
   } catch (error) {
-    console.error('Erro ao comparar períodos:', error);
+    logSanitizedError('Erro ao comparar períodos', error, { userId: req?.user?.id });
     res.status(500).json({ message: 'Erro ao comparar períodos.' });
   }
 }
@@ -213,18 +215,18 @@ export async function sendMessageStream(req, res) {
       },
     });
 
-    // Enviar via WebSocket em streaming
     const io = global.io;
     if (!io || !socketId) {
       return res.status(400).json({ message: 'WebSocket não disponível.' });
     }
 
     const socket = io.sockets.sockets.get(socketId);
-    if (!socket) {
-      return res.status(400).json({ message: 'Socket não encontrado.' });
+    if (!socket || socket.userId !== req.user.id) {
+      logger.warn('Unauthorized socket emit attempt', { userId: req.user.id, socketId });
+      return res.status(403).json({ message: 'Não autorizado.' });
     }
 
-    // Gerar resposta com streaming
+    
     const context = await prisma.$transaction(async (tx) => {
       const now = new Date();
       const periodDays = {
@@ -286,8 +288,7 @@ export async function sendMessageStream(req, res) {
     // Enviar contexto para o cliente
     socket.emit('chat:context', { context });
 
-    // Simular streaming (para simplificar, enviamos chunks)
-    // Em produção, usaríamos o streaming real da API do Gemini
+ 
     const historyText = conversationHistory
       .map(msg => `${msg.role === 'user' ? 'Usuário' : 'Assistente'}: ${msg.content}`)
       .join('\n');
@@ -313,16 +314,16 @@ ${context.recentTransactions.map(t => `- ${t.type === 'income' ? 'Receita' : 'De
     const userMessage = message;
     const fullPrompt = `${contextText}\n\nHistórico da conversa:\n${historyText}\n\nPergunta atual: ${userMessage}`;
 
-    // Chamar a função de geração (não-streaming por enquanto)
+   
     const { generateFinancialAdvice } = await import('../services/aiService.js');
     const response = await generateFinancialAdvice(userId, message, conversationHistory.reverse(), period);
 
-    // Simular streaming enviando chunks
+   
     const chunkSize = 100;
     for (let i = 0; i < response.length; i += chunkSize) {
       const chunk = response.slice(i, i + chunkSize);
       socket.emit('chat:chunk', { chunk, done: false });
-      await new Promise(resolve => setTimeout(resolve, 50)); // Delay para simular streaming
+      await new Promise(resolve => setTimeout(resolve, 50)); 
     }
 
     socket.emit('chat:chunk', { chunk: '', done: true });
@@ -344,7 +345,7 @@ ${context.recentTransactions.map(t => `- ${t.type === 'income' ? 'Receita' : 'De
       streamed: true,
     });
   } catch (error) {
-    console.error('Erro ao enviar mensagem com streaming:', error);
+    logSanitizedError('Erro ao enviar mensagem com streaming', error, { userId: req?.user?.id });
     res.status(500).json({ message: 'Erro ao processar mensagem.' });
   }
 }

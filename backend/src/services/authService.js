@@ -6,6 +6,7 @@ import { logger } from '../config/logger.js';
 import * as otplib from 'otplib';
 import crypto from 'crypto';
 import { env } from '../config/env.js';
+import { sendPasswordResetEmail } from './emailService.js';
 
 
 // Normalize bcrypt import shape to support both runtime (default export) and test mocks
@@ -384,25 +385,95 @@ export async function resetTotpForUser(userId) {
 }
 
 export async function forgotPassword(email) {
+  // Always respond the same way to avoid user enumeration
   const user = await prisma.user.findUnique({ where: { email } });
   logger.info('Password reset requested', { email, found: !!user });
-  return {
-    found: !!user,
-    note: 'Implementação simplificada. Em produção, gere token seguro e envie por e-mail.'
-  };
-}
 
-export async function resetPassword(email, newPassword) {
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) throw new NotFoundError('Usuário não encontrado.');
+  if (!user) {
+    // Do not reveal non-existence
+    return { success: true };
+  }
 
-  const passwordHash = await bcryptLib.hash(newPassword, 10);
-  await prisma.user.update({
-    where: { email },
-    data: { passwordHash }
+  // Invalidate previous unused tokens for this user
+  await prisma.passwordResetToken.updateMany({
+    where: { userId: user.id, usedAt: null },
+    data: { usedAt: new Date() }
   });
 
-  logger.info('Password reset successfully', { userId: user.id, email });
+  // generate a secure token and store only its hash
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = await bcryptLib.hash(rawToken, 10);
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
+  await prisma.passwordResetToken.create({
+    data: {
+      userId: user.id,
+      tokenHash,
+      expiresAt
+    }
+  });
+
+  const resetUrl = `${env.frontendUrl}/reset-password?token=${encodeURIComponent(rawToken)}&email=${encodeURIComponent(email)}`;
+
+  try {
+    await sendPasswordResetEmail(email, resetUrl);
+    logger.info('Password reset email queued/sent', { userId: user.id, email });
+  } catch (err) {
+    // Do not reveal send errors to caller; log internally
+    logger.warn('Failed to send password reset email', { userId: user.id, email, error: err.message });
+  }
+
+  return { success: true };
+}
+
+export async function resetPassword(email, token, newPassword) {
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) {
+    // Generic error to avoid leaking which part failed
+    logger.warn('Password reset attempt for non-existent email', { email });
+    throw new AuthenticationError('Token inválido ou expirado.');
+  }
+
+  const now = new Date();
+  const candidates = await prisma.passwordResetToken.findMany({
+    where: {
+      userId: user.id,
+      usedAt: null,
+      expiresAt: { gt: now }
+    }
+  });
+
+  let matched = null;
+  for (const rec of candidates) {
+    try {
+      // Skip tokens that are already used or expired (defense-in-depth since tests may mock records)
+      if (rec.usedAt) continue;
+      if (rec.expiresAt <= now) continue;
+
+      const ok = await bcryptLib.compare(token, rec.tokenHash);
+      if (ok) {
+        matched = rec;
+        break;
+      }
+    } catch (err) {
+      // ignore and continue
+    }
+  }
+
+  if (!matched) {
+    logger.warn('Invalid or expired password reset token presented', { userId: user.id, email });
+    throw new AuthenticationError('Token inválido ou expirado.');
+  }
+
+  // mark token as used
+  await prisma.passwordResetToken.update({ where: { id: matched.id }, data: { usedAt: new Date() } });
+
+  // update password and revoke refresh tokens
+  const passwordHash = await bcryptLib.hash(newPassword, 10);
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+
+  await revokeAllRefreshTokensForUser(user.id);
+
+  logger.info('Password reset successful via token', { userId: user.id, email });
   return { success: true };
 }

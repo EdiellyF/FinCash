@@ -27,7 +27,6 @@ const app = express();
 app.use(cors({ origin: env.frontendUrl, credentials: true }));
 app.use(express.json());
 
-// Request logging middleware
 app.use((req, res, next) => {
   logger.info(`${req.method} ${req.path}`, {
     userId: req.user?.id,
@@ -39,11 +38,9 @@ app.use((req, res, next) => {
 
 app.get('/api/health', (req, res) => res.json({ message: 'API online' }));
 
-// Swagger API Documentation
 if (env.nodeEnv !== 'production') {
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 } else {
-  // Hide Swagger UI in production
   app.get('/api-docs', (req, res) => res.status(404).json({ message: 'Not found' }));
 }
 
@@ -61,18 +58,15 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/categorization', categorizationRoutes);
 
-// Debug routes (only enabled in non-production)
 if (env.nodeEnv !== 'production') {
   app.use('/api/debug', debugRoutes);
 } else {
-  // In production, keep the endpoint hidden
   app.get('/api/debug', (req, res) => res.status(404).json({ message: 'Not found' }));
 }
 
-// 404 handler for undefined routes
 app.use(notFoundHandler);
 
-// Global error handler
+
 app.use(errorMiddleware);
 
 export default app;

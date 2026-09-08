@@ -377,12 +377,21 @@ function parseJsonResponse(text) {
 /**
  * Processa os dados extraídos pela IA
  */
-function processExtractedData(data, categories) {
+export function processExtractedData(data, categories) {
   if (!data || !data.transactions || !Array.isArray(data.transactions)) {
     return [];
   }
 
-  return data.transactions.map(tx => {
+  let transactions = data.transactions;
+
+  // Protect against AI hallucinations returning extremely large arrays
+  const MAX_TRANSACTIONS = 200;
+  if (transactions.length > MAX_TRANSACTIONS) {
+    logger.warn('AI returned more than maximum allowed transactions; truncating', { returned: transactions.length, max: MAX_TRANSACTIONS });
+    transactions = transactions.slice(0, MAX_TRANSACTIONS);
+  }
+
+  return transactions.map(tx => {
     // Validar e normalizar tipo
     const type = tx.type === 'income' ? 'income' : 'expense';
     
@@ -396,13 +405,29 @@ function processExtractedData(data, categories) {
 
     const transactionDate = parseTransactionDate(tx.transactionDate);
 
+    // Sanitize title and description: remove non-printable control characters
+    const sanitize = (s) => {
+      if (!s && s !== 0) return '';
+      try {
+        return String(s).replace(/[\x00-\x1F\x7F]/g, '').trim();
+      } catch (e) {
+        return '';
+      }
+    };
+
+    const rawTitle = tx.title || tx.description || 'Transação';
+    const rawDescription = tx.description || '';
+
+    const title = sanitize(rawTitle).slice(0, 120);
+    const description = sanitize(rawDescription).slice(0, 500);
+
     return {
       type,
       amount,
       category: validCategory ? validCategory.name : tx.category || 'Outros',
       categoryId: validCategory ? validCategory.id : null,
-      title: tx.title || tx.description || 'Transação',
-      description: tx.description || '',
+      title: title || 'Transação',
+      description,
       transactionDate
     };
   }).filter(tx => tx.amount > 0); // Remover transações com valor inválido

@@ -34,6 +34,7 @@ model User {
   budgets        Budget[]
   chatMessages   ChatMessage[]
   refreshTokens  RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
 
   @@map("users")
 }
@@ -178,4 +179,19 @@ model RequestLog {
   @@index([userId, date])
   @@index([provider, date])
   @@map("request_logs")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  tokenHash String   @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("password_reset_tokens")
 }

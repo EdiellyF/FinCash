@@ -184,7 +184,7 @@ router.post('/logout', authMiddleware, validate(logoutSchema), logout);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/forgot-password', validate(forgotPasswordSchema), forgotPasswordController);
+router.post('/forgot-password', rateLimiter(3, 900000), validate(forgotPasswordSchema), forgotPasswordController);
 
 /**
  * @swagger
@@ -200,12 +200,17 @@ router.post('/forgot-password', validate(forgotPasswordSchema), forgotPasswordCo
  *             type: object
  *             required:
  *               - email
+ *               - token
  *               - newPassword
  *             properties:
  *               email:
  *                 type: string
  *                 format: email
  *                 example: "john@example.com"
+ *               token:
+ *                 type: string
+ *                 minLength: 32
+ *                 example: "<token-from-email>"
  *               newPassword:
  *                 type: string
  *                 minLength: 6
@@ -224,7 +229,7 @@ router.post('/forgot-password', validate(forgotPasswordSchema), forgotPasswordCo
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/reset-password', validate(resetPasswordSchema), resetPasswordController);
+router.post('/reset-password', rateLimiter(5, 900000), validate(resetPasswordSchema), resetPasswordController);
 
 
 

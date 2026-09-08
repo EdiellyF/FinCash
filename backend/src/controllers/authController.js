@@ -51,7 +51,7 @@ export async function forgotPasswordController(req, res) {
 
 export async function resetPasswordController(req, res) {
   logger.info('Password reset attempt', { email: req.validatedData.email });
-  const result = await resetPassword(req.validatedData.email, req.validatedData.newPassword);
+  const result = await resetPassword(req.validatedData.email, req.validatedData.token, req.validatedData.newPassword);
   logger.info('Password reset successful', { email: req.validatedData.email });
   return ok(res, result, 'Senha redefinida com sucesso.');
 }

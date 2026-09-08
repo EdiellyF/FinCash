@@ -14,6 +14,7 @@ import Chat from '../pages/Chat';
 import Stats from '../pages/Stats';
 import VerifyEmail from '../pages/VerifyEmail';
 import BackupLogin from '../pages/BackupLogin';
+import ResetPassword from '../pages/ResetPassword';
 import SetupTotp from '../pages/SetupTotp';
 import PrivacyPolicy from '../pages/PrivacyPolicy';
 
@@ -38,6 +39,7 @@ export default function AppRoutes() {
         <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/backup-login" element={<BackupLogin />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
 
       </Routes>
     </BrowserRouter>

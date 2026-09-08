@@ -12,7 +12,8 @@ vi.mock('../config/db.js', () => {
   return {
     prisma: {
       user: { findUnique, create, update },
-      refreshToken: { create, findMany, update, updateMany }
+      refreshToken: { create, findMany, update, updateMany },
+      passwordResetToken: { create, findMany, update, updateMany }
     }
   };
 });
@@ -27,7 +28,7 @@ vi.mock('bcryptjs', async () => {
 });
 
 import { prisma } from '../config/db.js';
-import { registerUser, loginUser, refreshUserSession, logoutUser } from '../services/authService.js';
+import { registerUser, loginUser, refreshUserSession, logoutUser, forgotPassword, resetPassword } from '../services/authService.js';
 import { ConflictError, AuthenticationError } from '../utils/errors.js';
 
 async function hashValue(value) {
@@ -42,6 +43,10 @@ beforeEach(() => {
   prisma.refreshToken.findMany.mockReset();
   prisma.refreshToken.update.mockReset();
   prisma.refreshToken.updateMany.mockReset();
+  prisma.passwordResetToken.create.mockReset?.();
+  prisma.passwordResetToken.findMany.mockReset?.();
+  prisma.passwordResetToken.update.mockReset?.();
+  prisma.passwordResetToken.updateMany.mockReset?.();
 
   prisma.refreshToken.create.mockResolvedValue({ id: 'rt-new' });
   prisma.refreshToken.update.mockResolvedValue({ id: 'rt-1' });
@@ -152,5 +157,71 @@ describe('authService', () => {
       where: { id: 'rt1' },
       data: { revokedAt: expect.any(Date) }
     }));
+  });
+
+  // Password reset tests
+  it('resets password with valid token and revokes refresh tokens', async () => {
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = await hashValue(rawToken);
+    const future = new Date(Date.now() + 60_000);
+
+    prisma.user.findUnique.mockResolvedValue({ id: 'u-reset', email: 'r@r.com' });
+    prisma.passwordResetToken.findMany.mockResolvedValue([
+      { id: 'prt1', userId: 'u-reset', tokenHash, expiresAt: future, usedAt: null }
+    ]);
+    prisma.passwordResetToken.update.mockResolvedValue({ id: 'prt1' });
+    prisma.user.update.mockResolvedValue({ id: 'u-reset' });
+
+    await expect(resetPassword('r@r.com', rawToken, 'newpass')).resolves.toEqual({ success: true });
+    expect(prisma.passwordResetToken.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'prt1' }, data: { usedAt: expect.any(Date) } }));
+    expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: 'u-reset' } }));
+  });
+
+  it('rejects expired token', async () => {
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = await hashValue(rawToken);
+    const past = new Date(Date.now() - 60_000);
+
+    prisma.user.findUnique.mockResolvedValue({ id: 'u-exp', email: 'e@e.com' });
+    prisma.passwordResetToken.findMany.mockResolvedValue([
+      { id: 'prt2', userId: 'u-exp', tokenHash, expiresAt: past, usedAt: null }
+    ]);
+
+    await expect(resetPassword('e@e.com', rawToken, 'newpass')).rejects.toBeInstanceOf(AuthenticationError);
+  });
+
+  it('rejects token that was already used', async () => {
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = await hashValue(rawToken);
+    const future = new Date(Date.now() + 60_000);
+
+    prisma.user.findUnique.mockResolvedValue({ id: 'u-used', email: 'u@u.com' });
+    prisma.passwordResetToken.findMany.mockResolvedValue([
+      { id: 'prt3', userId: 'u-used', tokenHash, expiresAt: future, usedAt: new Date() }
+    ]);
+
+    await expect(resetPassword('u@u.com', rawToken, 'newpass')).rejects.toBeInstanceOf(AuthenticationError);
+  });
+
+  it('token for other user does not work', async () => {
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = await hashValue(rawToken);
+    const future = new Date(Date.now() + 60_000);
+
+    // token belongs to another user
+    prisma.user.findUnique.mockResolvedValue({ id: 'u-target', email: 't@t.com' });
+    prisma.passwordResetToken.findMany.mockResolvedValue([]);
+
+    await expect(resetPassword('t@t.com', rawToken, 'newpass')).rejects.toBeInstanceOf(AuthenticationError);
+  });
+
+  it('forgotPassword does not reveal existence of email', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 'u-z', email: 'z@z.com' });
+    const res1 = await forgotPassword('z@z.com');
+
+    prisma.user.findUnique.mockResolvedValue(null);
+    const res2 = await forgotPassword('missing@no.com');
+
+    expect(res1).toEqual(res2);
   });
 });

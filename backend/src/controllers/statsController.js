@@ -1,4 +1,6 @@
 import { PrismaClient } from '@prisma/client';
+import { logger } from '../config/logger.js';
+import { logSanitizedError } from '../utils/safeLogger.js';
 
 const prisma = new PrismaClient();
 
@@ -107,7 +109,7 @@ export async function getUserStats(req, res) {
       avgTimeBetweenAnalyses: Math.round(avgTimeBetweenAnalyses / (1000 * 60)), // em minutos
     });
   } catch (error) {
-    console.error('Erro ao buscar estatísticas:', error);
+    logSanitizedError('Erro ao buscar estatísticas', error, { userId: req?.user?.id });
     res.status(500).json({ message: 'Erro ao buscar estatísticas.' });
   }
 }

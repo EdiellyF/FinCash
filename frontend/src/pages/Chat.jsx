@@ -122,46 +122,71 @@ export default function Chat() {
 
   // Conectar ao WebSocket ao montar
   useEffect(() => {
-    const socket = io('http://localhost:5000', {
-      transports: ['websocket'],
-      reconnection: true,
-    });
+    const ACCESS_TOKEN_KEY = 'finance_access_token';
+    const connect = () => {
+      const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+      const socket = io('http://localhost:5000', {
+        transports: ['websocket'],
+        reconnection: true,
+        auth: { token }
+      });
 
-    socketRef.current = socket;
+      socketRef.current = socket;
 
-    socket.on('chat:chunk', ({ chunk, done }) => {
-      if (done) {
-        const finalMessage = streamingMessageRef.current;
-        setMessages(prevMessages => prevMessages.map(msg => {
-          if (msg.id === tempMessageIdRef.current) {
-            return { ...msg, content: finalMessage, isStreaming: false };
-          }
-          return msg;
-        }));
-        streamingMessageRef.current = '';
-        setIsStreaming(false);
-        setStreamingMessage('');
-        tempMessageIdRef.current = null;
-      } else {
-        streamingMessageRef.current += chunk;
-        setStreamingMessage(prev => prev + chunk);
+      socket.on('chat:chunk', ({ chunk, done }) => {
+        if (done) {
+          const finalMessage = streamingMessageRef.current;
+          setMessages(prevMessages => prevMessages.map(msg => {
+            if (msg.id === tempMessageIdRef.current) {
+              return { ...msg, content: finalMessage, isStreaming: false };
+            }
+            return msg;
+          }));
+          streamingMessageRef.current = '';
+          setIsStreaming(false);
+          setStreamingMessage('');
+          tempMessageIdRef.current = null;
+        } else {
+          streamingMessageRef.current += chunk;
+          setStreamingMessage(prev => prev + chunk);
+        }
+      });
+
+      socket.on('chat:context', ({ context }) => {
+        console.log('Contexto recebido:', context);
+      });
+
+      socket.on('connect', () => {
+        console.log('Conectado ao WebSocket');
+      });
+
+      socket.on('disconnect', () => {
+        console.log('Desconectado do WebSocket');
+      });
+
+      return socket;
+    };
+
+    // initial connect
+    let sock = connect();
+
+    // reconnect when token changes in localStorage (e.g., after refresh)
+    const onStorage = (e) => {
+      if (e.key === 'finance_access_token') {
+        try {
+          sock.disconnect();
+        } catch (err) {
+          // ignore
+        }
+        sock = connect();
       }
-    });
+    };
 
-    socket.on('chat:context', ({ context }) => {
-      console.log('Contexto recebido:', context);
-    });
-
-    socket.on('connect', () => {
-      console.log('Conectado ao WebSocket');
-    });
-
-    socket.on('disconnect', () => {
-      console.log('Desconectado do WebSocket');
-    });
+    window.addEventListener('storage', onStorage);
 
     return () => {
-      socket.disconnect();
+      try { sock.disconnect(); } catch (err) {}
+      window.removeEventListener('storage', onStorage);
     };
   }, []);
 
