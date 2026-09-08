@@ -11,32 +11,29 @@ env:
   REGION: us-central1
   DATABASE_URL: ${{ secrets.DATABASE_URL }}
   IMAGE_NAME: gcr.io/${{ secrets.GCP_PROJECT_ID }}/fincash-backend:latest
+  DB_INSTANCE: fincashs:us-central1:bd-898990
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: hw-prod
     
-    # Adicionado suporte para autenticação via credenciais (mantendo compatibilidade)
     steps:
       - name: Checkout
         uses: actions/checkout@v2
 
-      # Autenticação no Google Cloud usando sua chave de Service Account
       - name: Google Auth
         id: auth
         uses: 'google-github-actions/auth@v1'
         with:
           credentials_json: ${{ secrets.GCP_CREDENTIALS }}
 
-      # Configura o SDK do gcloud e o Docker
       - name: Setup Cloud SDK & Docker
         uses: google-github-actions/setup-gcloud@v1
       
       - name: Configure Docker
         run: gcloud auth configure-docker --quiet
 
-      # Passo do Cloud SQL Proxy igual ao exemplo que você mandou (usando wget)
       - name: Download SQL Auth Proxy
         run: "wget https://dl.google.com/cloudsql/cloud_sql_proxy.linux.amd64 -O cloud_sql_proxy"
         
@@ -46,20 +43,17 @@ jobs:
       - name: Start the Cloud SQL proxy and run migrations
         working-directory: ./backend
         run: |
-          ../cloud_sql_proxy -instances=fincashs:us-central1:bd-898990=tcp:5432 &
+          ../cloud_sql_proxy -instances=$DB_INSTANCE=tcp:5432 &
           sleep 3
           npx prisma migrate deploy
 
-      # Build da imagem Docker limpa (sem migrações dentro)
       - name: Build Docker image
         working-directory: ./backend
         run: docker build -t $IMAGE_NAME .
 
-      # Envia a imagem para o Google Container Registry
       - name: Push Docker image
         run: docker push $IMAGE_NAME
 
-      # Faz o deploy direto para o Cloud Run
       - name: Deploy to Cloud Run
         id: deploy
         run: |
@@ -71,10 +65,9 @@ jobs:
             --max-instances 1 \
             --platform managed \
             --port 5000 \
-            --add-cloudsql-instances fincashs:us-central1:bd-898990 \
+            --add-cloudsql-instances ${{ env.DB_INSTANCE }} \
             --allow-unauthenticated \
             --timeout=300s
 
-      # Mostra a URL final gerada pelo Cloud Run
       - name: Show Output
         run: echo ${{ steps.deploy.outputs.url }}
