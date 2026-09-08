@@ -31,6 +31,10 @@ export const env = {
   ollamaModel: process.env.OLLAMA_MODEL || 'llama3.2',
   // Comma-separated provider priority, e.g. 'groq,gemini,ollama'
   aiProviderPriority: process.env.AI_PROVIDER_PRIORITY || 'groq,gemini,ollama',
-  
+
+  // Cleanup configuration for password reset tokens
+  passwordResetCleanupEnabled: process.env.PASSWORD_RESET_CLEANUP_ENABLED !== 'false',
+  passwordResetCleanupIntervalMs: Number(process.env.PASSWORD_RESET_CLEANUP_INTERVAL_MS || 3600000), // default 1 hour
+
   nodeEnv
 };

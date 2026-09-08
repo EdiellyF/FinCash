@@ -21,8 +21,8 @@ io.use(socketAuthMiddleware);
 global.io = io;
 // Start periodic cleanup job for expired/used password reset tokens
 import { startPasswordResetTokenCleanup } from './jobs/cleanupPasswordResetTokens.js';
-// Run cleanup every hour (3600000 ms). Returns a stop function if needed.
-startPasswordResetTokenCleanup({ intervalMs: 3600000 });
+// Start cleanup with configuration from env (startPasswordResetTokenCleanup reads env)
+startPasswordResetTokenCleanup();
 
 
 io.on('connection', (socket) => {
