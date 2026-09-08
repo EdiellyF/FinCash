@@ -17,6 +17,12 @@ const prisma = new PrismaClient();
  * Returns a function to stop the interval when called.
  */
 export function startPasswordResetTokenCleanup({ intervalMs } = {}) {
+  // In test environment, default to disabled unless explicitly enabled via env var
+  if (env.nodeEnv === 'test' && typeof process.env.PASSWORD_RESET_CLEANUP_ENABLED === 'undefined') {
+    logger.info('Password reset token cleanup job disabled in test environment (override with PASSWORD_RESET_CLEANUP_ENABLED=true)');
+    return () => {};
+  }
+
   // Respect explicit env-based enable flag
   const enabled = (typeof env.passwordResetCleanupEnabled !== 'undefined') ? env.passwordResetCleanupEnabled : true;
   if (!enabled) {
