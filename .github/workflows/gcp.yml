@@ -2,67 +2,70 @@ name: GCP
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  SERVICE: fincash-backend
+  REGION: us-central1
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  IMAGE_NAME: gcr.io/${{ secrets.GCP_PROJECT_ID }}/fincash-backend:latest
 
 jobs:
   deploy:
-    name: Build, Migrate and Deploy
     runs-on: ubuntu-latest
     environment: hw-prod
-    env:
-      IMAGE_NAME: gcr.io/${{ secrets.GCP_PROJECT_ID }}/fincash-backend:latest
-      # Configure a string de conexão apontando para o localhost na porta padrão do proxy
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    
+    # Adicionado suporte para autenticação via credenciais (mantendo compatibilidade)
     steps:
-      # Git checkout
       - name: Checkout
         uses: actions/checkout@v2
 
-      # Login to GCP (atualizado para ações mais recentes)
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v1
+      # Autenticação no Google Cloud usando sua chave de Service Account
+      - name: Google Auth
+        id: auth
+        uses: 'google-github-actions/auth@v1'
         with:
           credentials_json: ${{ secrets.GCP_CREDENTIALS }}
 
-      # Configura o gcloud
-      - name: Setup Cloud SDK
+      # Configura o SDK do gcloud e o Docker
+      - name: Setup Cloud SDK & Docker
         uses: google-github-actions/setup-gcloud@v1
-
-      # gcloud configure docker
+      
       - name: Configure Docker
         run: gcloud auth configure-docker --quiet
 
-      # Baixa e configura o Cloud SQL Auth Proxy
-      - name: Download Cloud SQL Auth Proxy
-        run: |
-          curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-proxies/v2.8.0/cloud-sql-proxy.linux.amd64
-          chmod +x cloud-sql-proxy
-
-      # Inicia o Proxy em background e executa as migrações do Prisma com segurança
-      - name: Run Prisma Migrations
+      # Passo do Cloud SQL Proxy igual ao exemplo que você mandou (usando wget)
+      - name: Download SQL Auth Proxy
+        run: "wget https://dl.google.com/cloudsql/cloud_sql_proxy.linux.amd64 -O cloud_sql_proxy"
+        
+      - name: Make the Cloud SQL Auth proxy executable
+        run: "chmod +x cloud_sql_proxy"
+        
+      - name: Start the Cloud SQL proxy and run migrations
         working-directory: ./backend
         run: |
-          ../cloud-sql-proxy fincashs:us-central1:bd-898990 --port=5432 &
-          
-          # Aguarda o proxy subir e roda as migrações
+          ../cloud_sql_proxy -instances=fincashs:us-central1:bd-898990=tcp:5432 &
           sleep 3
           npx prisma migrate deploy
 
-      # build image
+      # Build da imagem Docker limpa (sem migrações dentro)
       - name: Build Docker image
         working-directory: ./backend
         run: docker build -t $IMAGE_NAME .
 
-      # push image to registry
+      # Envia a imagem para o Google Container Registry
       - name: Push Docker image
         run: docker push $IMAGE_NAME
 
-      # deploy image (sem as migrações embutidas no container)
-      - name: Deploy Docker image
+      # Faz o deploy direto para o Cloud Run
+      - name: Deploy to Cloud Run
+        id: deploy
         run: |
-          gcloud run deploy fincash-backend \
-            --image $IMAGE_NAME \
-            --region us-central1 \
+          gcloud run deploy ${{ env.SERVICE }} \
+            --image ${{ env.IMAGE_NAME }} \
+            --region ${{ env.REGION }} \
             --memory 512Mi \
             --min-instances 0 \
             --max-instances 1 \
@@ -71,3 +74,7 @@ jobs:
             --add-cloudsql-instances fincashs:us-central1:bd-898990 \
             --allow-unauthenticated \
             --timeout=300s
+
+      # Mostra a URL final gerada pelo Cloud Run
+      - name: Show Output
+        run: echo ${{ steps.deploy.outputs.url }}
