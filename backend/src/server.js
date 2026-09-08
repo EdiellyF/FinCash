@@ -24,7 +24,9 @@ io.on('connection', (socket) => {
   });
 });
 
-httpServer.listen(env.port, '0.0.0.0', () => {
+const port = process.env.PORT || env.port || 5000;
+
+httpServer.listen(port, '0.0.0.0', () => {
   logger.info(`Server running on http://0.0.0.0:${env.port}`);
   logger.info(`WebSocket enabled`);
 });
