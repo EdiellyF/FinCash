@@ -13,4 +13,4 @@ RUN node node_modules/prisma/build/index.js generate
 EXPOSE 5000
 
 # Apenas inicia o servidor (as migrações rodam separadamente)
-CMD ["node", "src/server.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node src/server.js"]
