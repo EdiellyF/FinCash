@@ -10,10 +10,7 @@ COPY . .
 # Gera o cliente do Prisma
 RUN node node_modules/prisma/build/index.js generate
 
-# Compila o código TypeScript para JavaScript (criando a pasta dist/ lá dentro do contêiner)
-RUN npm run build
-
 EXPOSE 5000
 
-# Executa as migrations e inicia o app chamando o arquivo compilado diretamente com o node
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
+# Executa as migrations do Prisma e inicia o servidor JS nativo
+CMD ["sh", "-c", "npx prisma migrate deploy && node src/server.js"]
