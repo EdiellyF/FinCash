@@ -7,11 +7,13 @@ RUN npm install
 
 COPY . .
 
+# Gera o cliente do Prisma
 RUN node node_modules/prisma/build/index.js generate
+
+# Compila o código TypeScript para JavaScript (criando a pasta dist/ lá dentro do contêiner)
+RUN npm run build
 
 EXPOSE 5000
 
-# Em produção, roda as migrations pendentes antes de subir o servidor,
-# e usa "npm start" (node puro) em vez de "npm run dev" (nodemon, feito
-# para desenvolvimento local, não para produção).
-CMD ["sh", "-c", "npx prisma migrate deploy && npm start"]
+# Executa as migrations e inicia o app chamando o arquivo compilado diretamente com o node
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
