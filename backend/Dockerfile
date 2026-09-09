@@ -3,14 +3,13 @@ FROM node:20
 WORKDIR /app
 
 COPY package*.json ./
-COPY prisma ./prisma/
-
 RUN npm install
 
 COPY . .
 
-USER node
+
 
 EXPOSE 5000
 
-CMD ["node", "src/server.js"]
+# Executa as migrations do Prisma e inicia o servidor JS nativo
+CMD ["sh", "-c", "node src/server.js"]
