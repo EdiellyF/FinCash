@@ -11,7 +11,7 @@ env:
   REGION: us-central1
   DATABASE_URL: ${{ secrets.DATABASE_URL }}
   IMAGE_NAME: gcr.io/${{ secrets.GCP_PROJECT_ID }}/fincash-backend:latest
-  DB_INSTANCE: ${{ secrets.GCP_PROJECT_ID }}
+  DB_INSTANCE: ${{ secrets.GCP_INSTANCE_NAME }}
 
 jobs:
   deploy:
@@ -34,16 +34,15 @@ jobs:
       - name: Configure Docker
         run: gcloud auth configure-docker --quiet
 
-      - name: Download SQL Auth Proxy
-        run: "wget https://dl.google.com/cloudsql/cloud_sql_proxy.linux.amd64 -O cloud_sql_proxy"
-        
-      - name: Make the Cloud SQL Auth proxy executable
-        run: "chmod +x cloud_sql_proxy"
+      - name: Download Cloud SQL Auth Proxy v2
+        run: |
+          curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy.linux.amd64
+          chmod +x cloud-sql-proxy
         
       - name: Start the Cloud SQL proxy and run migrations
         working-directory: ./backend
         run: |
-          ../cloud_sql_proxy -instances=$DB_INSTANCE=tcp:5432 &
+          ../cloud-sql-proxy $DB_INSTANCE &
           sleep 3
           npx prisma migrate deploy
 
