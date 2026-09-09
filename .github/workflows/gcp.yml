@@ -11,7 +11,7 @@ env:
   REGION: us-central1
   DATABASE_URL: ${{ secrets.DATABASE_URL }}
   IMAGE_NAME: gcr.io/${{ secrets.GCP_PROJECT_ID }}/fincash-backend:latest
-  DB_INSTANCE: ${{ secrets.GCP_PROJECT_ID }}:us-central1:banco-de-dados444
+  DB_INSTANCE: ${{ secrets.GCP_PROJECT_ID }}:central1:bd-fincash-cl
 
 jobs:
   deploy:
