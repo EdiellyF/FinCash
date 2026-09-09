@@ -17,7 +17,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: hw-prod
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -30,16 +30,16 @@ jobs:
 
       - name: Setup Cloud SDK & Docker
         uses: google-github-actions/setup-gcloud@v1
-      
+
       - name: Configure Docker
         run: gcloud auth configure-docker --quiet
 
       - name: Download SQL Auth Proxy v1
         run: "wget https://dl.google.com/cloudsql/cloud_sql_proxy.linux.amd64 -O cloud_sql_proxy"
-        
+
       - name: Make the Cloud SQL Auth proxy executable
         run: "chmod +x cloud_sql_proxy"
-        
+
       - name: Start the Cloud SQL proxy and run migrations
         run: |
           ./cloud_sql_proxy -instances=$DB_INSTANCE=tcp:5432 &
