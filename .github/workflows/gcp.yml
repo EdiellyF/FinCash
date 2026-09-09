@@ -68,7 +68,7 @@ jobs:
             --port 5000 \
             --add-cloudsql-instances ${{ env.DB_INSTANCE }} \
             --allow-unauthenticated \
-            --timeout=300s
+            --timeout=600s
 
       - name: Show Output
         run: echo ${{ steps.deploy.outputs.url }}
