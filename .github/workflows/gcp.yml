@@ -44,7 +44,9 @@ jobs:
         run: |
           ./cloud_sql_proxy -instances=$DB_INSTANCE=tcp:5432 &
           sleep 3
-          cd backend && npx prisma migrate deploy
+          cd backend
+          npm ci
+          npx prisma migrate deploy
 
       - name: Build Docker image
         working-directory: ./backend
