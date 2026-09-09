@@ -11,7 +11,6 @@ env:
   REGION: us-central1
   DATABASE_URL: ${{ secrets.DATABASE_URL }}
   IMAGE_NAME: gcr.io/${{ secrets.GCP_PROJECT_ID }}/fincash-backend:latest
-  DB_INSTANCE: ${{ secrets.GCP_INSTANCE_NAME }}
 
 jobs:
   deploy:
@@ -42,7 +41,7 @@ jobs:
       - name: Start the Cloud SQL proxy and run migrations
         working-directory: ./backend
         run: |
-          ../cloud-sql-proxy $DB_INSTANCE &
+          ../cloud-sql-proxy ${{ secrets.GCP_PROJECT_ID }}:us-central1:banco-de-dados444 &
           sleep 3
           npx prisma migrate deploy
 
@@ -64,7 +63,7 @@ jobs:
             --max-instances 1 \
             --platform managed \
             --port 5000 \
-            --add-cloudsql-instances ${{ env.DB_INSTANCE }} \
+            --add-cloudsql-instances ${{ secrets.GCP_PROJECT_ID }}:us-central1:banco-de-dados444 \
             --allow-unauthenticated \
             --timeout=300s
 
