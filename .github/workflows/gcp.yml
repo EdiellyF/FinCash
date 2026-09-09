@@ -11,6 +11,7 @@ env:
   REGION: us-central1
   DATABASE_URL: ${{ secrets.DATABASE_URL }}
   IMAGE_NAME: gcr.io/${{ secrets.GCP_PROJECT_ID }}/fincash-backend:latest
+  DB_INSTANCE: ${{ secrets.GCP_PROJECT_ID }}:us-central1:banco-de-dados444
 
 jobs:
   deploy:
@@ -33,17 +34,17 @@ jobs:
       - name: Configure Docker
         run: gcloud auth configure-docker --quiet
 
-      - name: Download Cloud SQL Auth Proxy v2
-        run: |
-          curl -o cloud-sql-proxy -L https://github.com/GoogleCloudPlatform/cloud-sql-proxy/releases/download/v2.14.2/cloud-sql-proxy.linux.amd64
-          chmod +x cloud-sql-proxy
+      - name: Download SQL Auth Proxy v1
+        run: "wget https://dl.google.com/cloudsql/cloud_sql_proxy.linux.amd64 -O cloud_sql_proxy"
+        
+      - name: Make the Cloud SQL Auth proxy executable
+        run: "chmod +x cloud_sql_proxy"
         
       - name: Start the Cloud SQL proxy and run migrations
-        working-directory: ./backend
         run: |
-          ../cloud-sql-proxy ${{ secrets.GCP_PROJECT_ID }}:us-central1:banco-de-dados444 &
+          ./cloud_sql_proxy -instances=$DB_INSTANCE=tcp:5432 &
           sleep 3
-          npx prisma migrate deploy
+          cd backend && npx prisma migrate deploy
 
       - name: Build Docker image
         working-directory: ./backend
@@ -63,7 +64,7 @@ jobs:
             --max-instances 1 \
             --platform managed \
             --port 5000 \
-            --add-cloudsql-instances ${{ secrets.GCP_PROJECT_ID }}:us-central1:banco-de-dados444 \
+            --add-cloudsql-instances ${{ env.DB_INSTANCE }} \
             --allow-unauthenticated \
             --timeout=300s
 
