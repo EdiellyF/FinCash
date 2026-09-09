@@ -13,6 +13,7 @@ env:
   IMAGE_NAME: gcr.io/${{ secrets.GCP_PROJECT_ID }}/fincash-backend:latest
   DB_INSTANCE: ${{ secrets.GCP_PROJECT_ID }}:us-central1:bd-fincash-cl
 
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
