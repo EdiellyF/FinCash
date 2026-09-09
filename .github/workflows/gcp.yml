@@ -36,7 +36,7 @@ jobs:
 
       - name: Download Cloud SQL Auth Proxy v2
         run: |
-          curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy.linux.amd64
+          curl -o cloud-sql-proxy -L https://github.com/GoogleCloudPlatform/cloud-sql-proxy/releases/download/v2.14.2/cloud-sql-proxy.linux.amd64
           chmod +x cloud-sql-proxy
         
       - name: Start the Cloud SQL proxy and run migrations
