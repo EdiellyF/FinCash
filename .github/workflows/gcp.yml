@@ -67,7 +67,6 @@ jobs:
             --platform managed \
             --port 5000 \
             --add-cloudsql-instances ${{ env.DB_INSTANCE }} \
-            --set-env-vars FRONTEND_URL=${{ secrets.FRONTEND_URL }} \
             --allow-unauthenticated \
             --timeout=1000s
 
