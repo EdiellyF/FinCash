@@ -19,6 +19,10 @@ export const env = {
   accessTokenTtl: process.env.ACCESS_TOKEN_TTL || '15m',
   refreshTokenDays: Number(process.env.REFRESH_TOKEN_DAYS || 7),
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
+  frontendOrigins: (process.env.FRONTEND_URL || 'http://localhost:5173')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean),
   geminiApiKey: process.env.GEMINI_API_KEY,
   groqApiKey: process.env.GROQ_API_KEY,
   resendApiKey: process.env.RESEND_API_KEY,

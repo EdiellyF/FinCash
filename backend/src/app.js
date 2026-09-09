@@ -24,7 +24,17 @@ import { swaggerSpec } from './config/swaggerConfig.js';
 
 const app = express();
 
-app.use(cors({ origin: env.frontendUrl, credentials: true }));
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || env.frontendOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+}));
 app.use(express.json());
 
 // Request logging middleware
