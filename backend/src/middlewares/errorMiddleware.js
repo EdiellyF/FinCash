@@ -33,6 +33,34 @@ export function errorMiddleware(err, req, res, next) {
     });
   }
 
+  if (err.code === 'INVALID_PDF' || err.statusCode === 400) {
+    return res.status(400).json({
+      success: false,
+      message: err.message || 'Arquivo inválido.',
+      code: 'VALIDATION_ERROR',
+      ...(env.nodeEnv === 'development' && { stack: err.stack })
+    });
+  }
+
+  if (err.name === 'MulterError') {
+    const multerMessageMap = {
+      LIMIT_FILE_SIZE: 'Arquivo PDF muito grande. Envie um arquivo menor que 20MB.',
+      LIMIT_UNEXPECTED_FILE: 'Envie apenas um arquivo PDF.',
+      LIMIT_FILE_COUNT: 'Só é permitido enviar um arquivo por vez.',
+      LIMIT_PART_COUNT: 'Upload inválido.',
+      LIMIT_FIELD_KEY: 'Campo de upload inválido.',
+      LIMIT_FIELD_VALUE: 'Valor do campo de upload inválido.',
+      LIMIT_FIELD_COUNT: 'Muitos campos enviados.'
+    };
+
+    return res.status(400).json({
+      success: false,
+      message: multerMessageMap[err.code] || 'Arquivo inválido.',
+      code: 'FILE_UPLOAD_ERROR',
+      ...(env.nodeEnv === 'development' && { stack: err.stack })
+    });
+  }
+
   // Handle Prisma errors
   if (err.code && err.code.startsWith('P')) {
     return handlePrismaError(err, res);

@@ -8,35 +8,19 @@ import crypto from 'crypto';
 
 const prisma = new PrismaClient();
 
-// Configuração Gemini
 const genAI = env.geminiApiKey ? new GoogleGenerativeAI(env.geminiApiKey) : null;
 
-// Configuração GROQ
 const groqClient = env.groqApiKey ? new Groq({ apiKey: env.groqApiKey }) : null;
 
-// Configuração Ollama (local)
-const OLLAMA_API_URL = env.ollamaApiUrl || 'http://localhost:11434';
-const OLLAMA_MODEL = env.ollamaModel || 'llama3.2';
-
-// Limites de requisições (2 total por usuário por dia, somando todos os provedores - otimizado para estudantes)
-const TOTAL_DAILY_LIMIT_PER_USER = 2; // 2 requisições totais por dia para TODOS os provedores
-// NOTE: Global provider quotas are intentionally not enforced by the app anymore.
-// The system still records usage in RequestLog for observability, but global
-// counts are not used to block requests. Provider rate-limits returned by the
-// external APIs (e.g. 429 from Gemini/Groq) are still handled and can trigger
-// fallback to other providers.
+const TOTAL_DAILY_LIMIT_PER_USER = 2;
 
 
-// Modelos disponíveis
 const MODELS = {
-  gemini: 'gemini-1.5-pro', // Atualizado para gemini-1.5-pro
+  gemini: env.geminiModel || 'gemini-2.5-pro',
   groq: 'llama-3.3-70b-versatile',
-  ollama: env.ollamaModel || 'llama3.2',
 };
 
-/**
- * Obter contexto financeiro do usuário com período configurável
- */
+
 async function getFinancialContext(userId, period = '30d') {
   const now = new Date();
   const periodDays = {
@@ -105,9 +89,7 @@ async function getFinancialContext(userId, period = '30d') {
   };
 }
 
-/**
- * Obter contexto comparativo entre múltiplos períodos
- */
+
 export async function getComparativeContext(userId, periods = ['7d', '30d', '365d']) {
   const contexts = await Promise.all(
     periods.map(period => getFinancialContext(userId, period))
@@ -126,9 +108,7 @@ export async function getComparativeContext(userId, periods = ['7d', '30d', '365
   };
 }
 
-/**
- * Verifica e incrementa contador de requisições diárias por usuário
- */
+
 async function checkAndIncrementRequestCount(userId, provider) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -163,13 +143,6 @@ async function checkAndIncrementRequestCount(userId, provider) {
   return log.count + 1;
 }
 
-/**
- * Verifica limite global de um provedor
- */
-
-/**
- * Verifica limite por usuário de um provedor
- */
 async function checkUserLimit(userId, provider) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -187,9 +160,7 @@ async function checkUserLimit(userId, provider) {
   return log ? log.count : 0;
 }
 
-/**
- * Verifica limite TOTAL de requisições do usuário (somando todos os provedores)
- */
+
 async function checkTotalUserRequestCount(userId) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -199,7 +170,7 @@ async function checkTotalUserRequestCount(userId) {
       userId,
       date: today,
       provider: {
-        in: ['gemini', 'groq', 'ollama'],
+        in: ['gemini', 'groq'],
       },
     },
   });
@@ -207,12 +178,8 @@ async function checkTotalUserRequestCount(userId) {
   return logs.reduce((total, log) => total + log.count, 0);
 }
 
-/**
- * Obtém os limites configurados para cada provedor
- */
+
 function getProviderLimits(provider) {
-  // Only per-user total limit is enforced by the app. Global provider quotas
-  // are not enforced here; they are recorded for observability.
   const limits = {
     gemini: {
       perUser: TOTAL_DAILY_LIMIT_PER_USER, // Usa limite total por usuário
@@ -224,25 +191,19 @@ function getProviderLimits(provider) {
   return limits[provider] || { perUser: Infinity };
 }
 
-/**
- * Verifica se um provedor está disponível e dentro dos limites
- */
 async function isProviderAvailable(provider, userId) {
-  // Verificar se o cliente está configurado
   if (provider === 'gemini' && !genAI) return false;
   if (provider === 'groq' && !groqClient) return false;
 
   const limits = getProviderLimits(provider);
   const totalUserCount = await checkTotalUserRequestCount(userId);
 
-  // Only enforce the per-user total daily limit. Do not block based on any
-  // global provider counters here — global usage is recorded but not enforced.
   return totalUserCount < limits.perUser;
 }
 
 /**
  * Seleciona o melhor provedor disponível
- * Prioridade: GROQ > Gemini > Ollama
+ * Prioridade: GROQ > Gemini
  */
 async function selectBestProvider(userId) {
   // Tentar GROQ primeiro (mais rápido e com mais limites)
@@ -255,8 +216,7 @@ async function selectBestProvider(userId) {
     return 'gemini';
   }
 
-  // Fallback para Ollama (sempre disponível)
-  return 'ollama';
+  return null;
 }
 
 /**
@@ -493,38 +453,6 @@ Responda em PORTUGUÊS BRASILEIRO.`;
 }
 
 /**
- * Gera dica financeira usando Ollama
- */
-async function generateWithOllama(contextText, historyText, userMessage) {
-  const systemPrompt = `Você é um assistente financeiro especializado em ajudar pessoas a gerenciar suas finanças pessoais.
-Forneça dicas práticas, personalizadas e baseadas nos dados financeiros do usuário.
-Seja amigável, educativo e construtivo.
-Responda em português brasileiro.
-Considere o contexto financeiro fornecido para dar dicas específicas.`;
-
-  const fullPrompt = `${systemPrompt}\n\nContexto:\n${contextText}\n\nHistórico da conversa:\n${historyText}\n\nPergunta atual: ${userMessage}`;
-
-  const response = await fetch(`${OLLAMA_API_URL}/api/generate`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: MODELS.ollama,
-      prompt: fullPrompt,
-      stream: false,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Erro na API do Ollama: ${response.statusText}`);
-  }
-
-  const data = await response.json();
-  return data.response;
-}
-
-/**
  * Retorna os limites atuais do usuário (2 requisições totais por dia, somando todos os provedores)
  */
 export async function getUserLimits(userId) {
@@ -596,7 +524,7 @@ ${context.recentTransactions.map(t => `- ${t.type === 'income' ? 'Receita' : 'De
       .join('\n');
 
     // Provider priority is configurable via environment variable AI_PROVIDER_PRIORITY (comma-separated)
-    const providerPriority = (env.aiProviderPriority || 'groq,gemini,ollama').split(',').map(p => p.trim()).filter(Boolean);
+    const providerPriority = (env.aiProviderPriority || 'groq,gemini').split(',').map(p => p.trim()).filter(Boolean);
     let response = null;
     let usedProvider = null;
 
@@ -623,8 +551,6 @@ ${context.recentTransactions.map(t => `- ${t.type === 'income' ? 'Receita' : 'De
           response = await generateWithGroq(contextText, historyText, userMessage);
         } else if (candidate === 'gemini') {
           response = await generateWithGemini(contextText, historyText, userMessage);
-        } else {
-          response = await generateWithOllama(contextText, historyText, userMessage);
         }
 
         usedProvider = candidate;
@@ -653,9 +579,7 @@ ${context.recentTransactions.map(t => `- ${t.type === 'income' ? 'Receita' : 'De
       await checkAndIncrementRequestCount(userId, usedProvider);
 
       // Incrementar contador global para provedores pagos (registro apenas)
-      if (usedProvider !== 'ollama') {
-        await checkAndIncrementRequestCount('global', usedProvider);
-      }
+      await checkAndIncrementRequestCount('global', usedProvider);
     }
 
     return response;

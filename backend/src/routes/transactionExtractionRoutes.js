@@ -11,10 +11,16 @@ import {
 const router = Router();
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    if (file.mimetype !== 'application/pdf') {
-      cb(new Error('Envie um arquivo PDF valido.'));
+    const isPdfMime = file.mimetype === 'application/pdf' || file.mimetype === 'application/octet-stream';
+    const isPdfName = file.originalname?.toLowerCase().endsWith('.pdf');
+
+    if (!isPdfMime && !isPdfName) {
+      const error = new Error('Envie um arquivo PDF valido.');
+      error.statusCode = 400;
+      error.code = 'INVALID_PDF';
+      cb(error);
       return;
     }
 

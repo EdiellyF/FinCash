@@ -11,15 +11,10 @@ const genAI = env.geminiApiKey ? new GoogleGenerativeAI(env.geminiApiKey) : null
 // Configuração GROQ
 const groqClient = env.groqApiKey ? new Groq({ apiKey: env.groqApiKey }) : null;
 
-// Configuração Ollama (local)
-const OLLAMA_API_URL = env.ollamaApiUrl || 'http://localhost:11434';
-const OLLAMA_MODEL = env.ollamaModel || 'llama3.2';
-
 // Modelos disponíveis
 const MODELS = {
-  gemini: 'gemini-1.5-pro',
+  gemini: env.geminiModel || 'gemini-2.5-pro',
   groq: 'llama-3.3-70b-versatile',
-  ollama: env.ollamaModel || 'llama3.2',
 };
 
 /**
@@ -52,7 +47,7 @@ export async function extractTransactionsFromText(userId, text, options = {}) {
     const prompt = buildExtractionPrompt(text, categoryContext, isBankStatement);
 
     // Selecionar melhor provedor e gerar resposta
-    const provider = await selectBestProvider(userId);
+   const provider = await selectBestProvider(userId, 'text');
     const extractedData = await generateWithProvider(provider, prompt);
 
     // Processar e validar as transações extraídas
@@ -119,15 +114,15 @@ export async function extractTransactionsFromPDF(userId, pdfBuffer, options = {}
 
     if (hasReadableText) {
       const prompt = buildExtractionPrompt(extractedText, categoryContext, true);
-      provider = await selectBestProvider(userId);
+      provider = await selectBestProvider(userId, 'pdf');
       extractedData = await generateWithProvider(provider, prompt);
     } else {
       if (!genAI) {
-        throw new Error('O PDF parece ser escaneado ou imagem. Configure o Gemini para analisar PDFs sem texto legivel.');
+        throw new Error('O PDF parece ser escaneado ou imagem. Configure GEMINI_API_KEY para analisar PDFs sem texto legível.');
       }
 
       const prompt = buildExtractionPrompt('', categoryContext, true);
-      provider = 'gemini-vision';
+      provider = 'gemini';
       extractedData = await generateWithGeminiPDF(pdfBuffer.toString('base64'), prompt);
     }
 
@@ -282,8 +277,6 @@ async function generateWithProvider(provider, prompt) {
         return await generateWithGemini(prompt);
       case 'groq':
         return await generateWithGroq(prompt);
-      case 'ollama':
-        return await generateWithOllama(prompt);
       default:
         throw new Error(`Provider ${provider} not supported`);
     }
@@ -297,81 +290,90 @@ async function generateWithProvider(provider, prompt) {
  * Gera com Gemini
  */
 async function generateWithGemini(prompt) {
-  const model = genAI.getGenerativeModel({ model: MODELS.gemini });
-  const result = await model.generateContent(prompt);
-  const response = await result.response;
-  const text = response.text();
-  return parseJsonResponse(text);
+if (!genAI) {
+  throw new Error('GEMINI_API_KEY não configurada ou inválida. Configure uma chave válida para extrair transações com IA.');
+}
+
+const model = genAI.getGenerativeModel({ model: MODELS.gemini });
+const result = await model.generateContent(prompt);
+const response = await result.response;
+const text = response.text();
+return parseJsonResponse(text);
 }
 
 async function generateWithGeminiPDF(pdfBase64, prompt) {
-  const model = genAI.getGenerativeModel({ model: MODELS.gemini });
-  const result = await model.generateContent([
-    prompt,
-    {
-      inlineData: {
-        data: pdfBase64,
-        mimeType: 'application/pdf'
-      }
-    }
-  ]);
+if (!genAI) {
+  throw new Error('GEMINI_API_KEY não configurada ou inválida. Configure uma chave válida para analisar PDFs com IA.');
+}
 
-  return parseJsonResponse(result.response.text());
+const model = genAI.getGenerativeModel({ model: MODELS.gemini });
+const result = await model.generateContent([
+  prompt,
+  {
+    inlineData: {
+      data: pdfBase64,
+      mimeType: 'application/pdf'
+    }
+  }
+]);
+
+return parseJsonResponse(result.response.text());
 }
 
 /**
  * Gera com GROQ
  */
 async function generateWithGroq(prompt) {
-  const response = await groqClient.chat.completions.create({
-    model: MODELS.groq,
-    messages: [
-      { role: 'system', content: 'Você é um especialista em extração de dados financeiros. Responda apenas com JSON válido.' },
-      { role: 'user', content: prompt }
-    ],
-    temperature: 0.3,
-    max_tokens: 4000
-  });
-
-  const text = response.choices[0].message.content;
-  return parseJsonResponse(text);
+if (!groqClient) {
+  throw new Error('GROQ_API_KEY não configurada ou inválida. Configure uma chave válida para extrair transações com IA.');
 }
 
-/**
- * Gera com Ollama
- */
-async function generateWithOllama(prompt) {
-  const response = await fetch(`${OLLAMA_API_URL}/api/generate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: OLLAMA_MODEL,
-      prompt: prompt,
-      stream: false
-    })
-  });
+const response = await groqClient.chat.completions.create({
+  model: MODELS.groq,
+  messages: [
+    { role: 'system', content: 'Você é um especialista em extração de dados financeiros. Responda apenas com JSON válido.' },
+    { role: 'user', content: prompt }
+  ],
+  temperature: 0.3,
+  max_tokens: 4000
+});
 
-  const data = await response.json();
-  const text = data.response;
-  return parseJsonResponse(text);
+const text = response.choices[0].message.content;
+return parseJsonResponse(text);
 }
 
 /**
  * Faz parse da resposta JSON removendo markdown ou texto adicional
  */
 function parseJsonResponse(text) {
-  // Remover markdown code blocks se existirem
-  let cleanText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '');
-  
-  // Remover texto antes do primeiro { e depois do último }
+  if (!text || typeof text !== 'string') {
+    throw new Error('Resposta vazia da IA ao extrair transações.');
+  }
+
+  let cleanText = text
+    .replace(/```json\s*/gi, '')
+    .replace(/```\s*/g, '')
+    .trim();
+
   const firstBrace = cleanText.indexOf('{');
   const lastBrace = cleanText.lastIndexOf('}');
-  
-  if (firstBrace !== -1 && lastBrace !== -1) {
+
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
     cleanText = cleanText.substring(firstBrace, lastBrace + 1);
   }
 
-  return JSON.parse(cleanText);
+  cleanText = cleanText.replace(/,\s*([}\]])/g, '$1');
+
+  try {
+    return JSON.parse(cleanText);
+  } catch (error) {
+    const fallback = cleanText.match(/\{[\s\S]*\}/);
+    if (!fallback) {
+      throw new Error('A IA não retornou JSON válido para a extração de transações.');
+    }
+
+    return JSON.parse(fallback[0].replace(/,\s*([}\]])/g, '$1'));
+  }
 }
 
 /**
@@ -438,23 +440,24 @@ async function findMatchingCategory(categoryName, type, userId) {
   return category;
 }
 
-/**
- * Seleciona o melhor provedor disponível
- */
-async function selectBestProvider(userId) {
-  // Tentar GROQ primeiro
-  if (groqClient) return 'groq';
-  
-  // Tentar Gemini
-  if (genAI) return 'gemini';
-  
-  // Fallback para Ollama
-  return 'ollama';
+async function selectBestProvider(userId, mode = 'text') {
+  const providerPriority = (env.aiProviderPriority || 'groq,gemini')
+    .split(',')
+    .map((provider) => provider.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (mode === 'pdf' && genAI) {
+    return 'gemini';
+  }
+
+  for (const provider of providerPriority) {
+    if (provider === 'groq' && groqClient) return 'groq';
+    if (provider === 'gemini' && genAI) return 'gemini';
+  }
+
+  throw new Error('Nenhum provedor de IA configurado ou disponível. Configure GEMINI_API_KEY ou GROQ_API_KEY para usar a extração com IA.');
 }
 
-/**
- * Calcula confiança na extração baseada na quantidade e qualidade dos dados
- */
 function calculateConfidence(transactions) {
   if (transactions.length === 0) return 0;
   

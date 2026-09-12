@@ -2,6 +2,29 @@ import 'dotenv/config';
 
 const nodeEnv = process.env.NODE_ENV || 'development';
 
+function sanitizeApiKey(value) {
+  if (typeof value !== 'string') return undefined;
+
+  const cleaned = value.trim();
+  if (!cleaned) return undefined;
+
+  const placeholderPatterns = [
+    /^sua?_/i,
+    /^your_/i,
+    /^example_/i,
+    /^placeholder_/i,
+    /_aqui$/i,
+    /seu[_-]api[_-]key/i,
+    /your[_-]api[_-]key/i
+  ];
+
+  const isPlaceholder = placeholderPatterns.some((pattern) => pattern.test(cleaned));
+  if (isPlaceholder) {
+    return undefined;
+  }
+
+  return cleaned;
+}
 
 if (nodeEnv === 'production' && !process.env.JWT_SECRET) {
   throw new Error('Missing required environment variable: JWT_SECRET (required in production)');
@@ -23,18 +46,17 @@ export const env = {
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean),
-  geminiApiKey: process.env.GEMINI_API_KEY,
-  groqApiKey: process.env.GROQ_API_KEY,
-  resendApiKey: process.env.RESEND_API_KEY,
+  geminiApiKey: sanitizeApiKey(process.env.GEMINI_API_KEY),
+  geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-pro',
+  groqApiKey: sanitizeApiKey(process.env.GROQ_API_KEY),
+  resendApiKey: sanitizeApiKey(process.env.RESEND_API_KEY),
   smtpHost: process.env.SMTP_HOST,
   smtpPort: Number(process.env.SMTP_PORT || 587),
   smtpUser: process.env.SMTP_USER,
   smtpPass: process.env.SMTP_PASS,
   smtpFrom: process.env.SMTP_FROM,
-  ollamaApiUrl: process.env.OLLAMA_API_URL || 'http://localhost:11434',
-  ollamaModel: process.env.OLLAMA_MODEL || 'llama3.2',
-  // Comma-separated provider priority, e.g. 'groq,gemini,ollama'
-  aiProviderPriority: process.env.AI_PROVIDER_PRIORITY || 'groq,gemini,ollama',
-  
+  // Comma-separated provider priority, e.g. 'groq,gemini'
+  aiProviderPriority: process.env.AI_PROVIDER_PRIORITY || 'groq,gemini',
+
   nodeEnv
 };

@@ -170,7 +170,7 @@ model RequestLog {
   userId    String   @map("user_id")
   date      DateTime @default(now()) @db.Date
   count     Int      @default(0)
-  provider  String   // "gemini" ou "ollama"
+  provider  String   // "gemini" ou "groq"
   createdAt DateTime @default(now()) @map("created_at")
 
   @@unique([userId, date, provider])

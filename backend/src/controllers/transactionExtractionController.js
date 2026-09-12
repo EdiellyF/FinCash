@@ -7,6 +7,33 @@ import {
 import { ValidationError } from '../utils/errors.js';
 import { logger } from '../config/logger.js';
 
+const MAX_PDF_SIZE_BYTES = 20 * 1024 * 1024;
+
+function getPdfValidationFailure(file) {
+  if (!file?.buffer || !Buffer.isBuffer(file.buffer) || file.buffer.length < 5) {
+    return 'arquivo_vazio';
+  }
+
+  if (file.buffer.length > MAX_PDF_SIZE_BYTES) {
+    return 'arquivo_muito_grande';
+  }
+
+  const header = file.buffer.subarray(0, 5).toString('ascii');
+  const hasPdfHeader = header === '%PDF-';
+  const hasPdfExtension = /\.pdf$/i.test(file.originalname || '');
+  const contentTypeIsPdf = file.mimetype === 'application/pdf';
+
+  if (!hasPdfHeader && !(contentTypeIsPdf && hasPdfExtension)) {
+    return 'cabecalho_pdf_invalido';
+  }
+
+  return null;
+}
+
+function isPdfFile(file) {
+  return !getPdfValidationFailure(file);
+}
+
 export async function extractTransactions(req, res) {
   const { text } = req.body;
   
@@ -26,10 +53,44 @@ export async function extractTransactions(req, res) {
 
 export async function extractTransactionsPDF(req, res) {
   if (!req.file?.buffer) {
+    logger.warn('PDF extraction rejected: arquivo ausente', {
+      userId: req.user?.id,
+      path: req.path
+    });
     throw new ValidationError('Arquivo PDF e obrigatorio para extracao de transacoes.');
   }
 
-  if (req.file.mimetype !== 'application/pdf') {
+  const failureReason = getPdfValidationFailure(req.file);
+
+  if (req.file.size > MAX_PDF_SIZE_BYTES || failureReason === 'arquivo_muito_grande') {
+    logger.warn('PDF extraction rejected: arquivo muito grande', {
+      userId: req.user?.id,
+      fileName: req.file.originalname,
+      fileSize: req.file.size,
+      maxAllowedBytes: MAX_PDF_SIZE_BYTES
+    });
+    throw new ValidationError('Arquivo PDF muito grande. Envie um arquivo menor que 20MB.');
+  }
+
+  if (failureReason === 'cabecalho_pdf_invalido' || failureReason === 'arquivo_vazio') {
+    logger.warn('PDF extraction rejected: cabeçalho PDF inválido ou arquivo vazio', {
+      userId: req.user?.id,
+      fileName: req.file.originalname,
+      fileSize: req.file.size,
+      mimeType: req.file.mimetype,
+      reason: failureReason
+    });
+    throw new ValidationError('Envie um arquivo PDF valido. O arquivo enviado nao possui o cabecalho PDF esperado.');
+  }
+
+  if (!isPdfFile(req.file)) {
+    logger.warn('PDF extraction rejected: arquivo inválido', {
+      userId: req.user?.id,
+      fileName: req.file.originalname,
+      fileSize: req.file.size,
+      mimeType: req.file.mimetype,
+      reason: failureReason
+    });
     throw new ValidationError('Envie um arquivo PDF valido.');
   }
 
