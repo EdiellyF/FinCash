@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 
 import api from '../services/api';
 
-import { currency, dateBR } from '../../utils/format';
+import { currency, dateBR } from '../utils/format';
 
 export default function TransactionExtraction({ onTransactionsSaved }) {
   const [open, setOpen] = useState(false);
