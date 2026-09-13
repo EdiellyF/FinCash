@@ -72,21 +72,21 @@ const BUDGET_TEMPLATES = [
 
 function TemplateCard({ template, onApply }) {
   return (
-    <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+    <div className="rounded-xl border border-fincash-ink/10 bg-fincash-ink/5 p-4">
       <div className="mb-3">
-        <p className="font-bold text-slate-900 dark:text-white">{template.name}</p>
-        <p className="text-xs text-slate-500">{template.description}</p>
+        <p className="font-bold text-fincash-ink">{template.name}</p>
+        <p className="text-xs text-fincash-ink/60">{template.description}</p>
       </div>
       <div className="mb-3 space-y-1">
         {template.budgets.map((b, idx) => (
-          <p key={idx} className="text-xs text-slate-600 dark:text-slate-400">
-            {b.category}: <span className="font-semibold">{currency(b.limit)}</span>
+          <p key={idx} className="text-xs text-fincash-ink/80">
+            {b.category}: <span className="font-semibold font-mono tabular-nums">{currency(b.limit)}</span>
           </p>
         ))}
       </div>
       <button
         onClick={() => onApply(template)}
-        className="w-full rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"
+        className="w-full rounded-lg bg-fincash-forest px-3 py-2 text-xs font-semibold text-white hover:opacity-90"
       >
         Aplicar este template
       </button>
@@ -165,7 +165,7 @@ export default function Budgets() {
       {/* Templates de Orçamento para Estudantes */}
       {rows.length === 0 && (
         <PageCard title="📋 Templates de Orçamento para Estudantes">
-          <p className="mb-4 text-sm text-slate-600 dark:text-slate-400">
+          <p className="mb-4 text-sm text-fincash-ink/60">
             Escolha um perfil que se adequa à sua situação e aplicaremos um orçamento baseado em padrões comuns de estudantes universitários:
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -179,50 +179,59 @@ export default function Budgets() {
       <PageCard
         title="Orçamentos mensais"
         actions={
-          <button onClick={handleNew} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700">
+          <button onClick={handleNew} className="flex items-center gap-2 rounded-xl bg-fincash-forest px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90">
             <Plus size={16} /> Novo orçamento
           </button>
         }
       >
         {rows.length === 0 ? (
           <div className="py-12 text-center">
-            <Wallet size={40} className="mx-auto mb-3 text-slate-300" />
-            <p className="text-sm text-slate-400">Nenhum orçamento cadastrado.</p>
-            <button onClick={handleNew} className="mt-3 text-sm font-semibold text-emerald-600 hover:underline">Criar primeiro orçamento</button>
+            <Wallet size={40} className="mx-auto mb-3 text-fincash-ink/20" />
+            <p className="text-sm text-fincash-ink/40">Nenhum orçamento cadastrado.</p>
+            <button onClick={handleNew} className="mt-3 text-sm font-semibold text-fincash-forest hover:underline">Criar primeiro orçamento</button>
           </div>
         ) : (
           <div className="space-y-2">
             {rows.map(row => {
               const spent = row.spentAmount ? Number(row.spentAmount) : 0;
               const limit = Number(row.limitAmount);
-              const pct = limit > 0 ? Math.min(100, (spent / limit) * 100) : 0;
+              const pct = limit > 0 ? (spent / limit) * 100 : 0;
               const over = pct >= 100;
               const warn = pct >= 80;
 
               return (
-                <div key={row.id} className={`rounded-xl border p-4 ${over ? 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/10' : 'border-slate-100 dark:border-slate-800'}`}>
+                <div key={row.id} className={`rounded-xl border p-4 ${over ? 'border-fincash-terracotta/20 bg-fincash-terracotta/5' : 'border-fincash-ink/10'}`}>
                   <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      {over ? <AlertTriangle size={16} className="text-red-500" /> : warn ? <AlertTriangle size={16} className="text-amber-500" /> : <CheckCircle size={16} className="text-emerald-500" />}
+                      {over ? (
+                        <Badge tone="terracotta"><AlertTriangle size={12} /> Limite Excedido</Badge>
+                      ) : warn ? (
+                        <Badge tone="gold"><AlertTriangle size={12} /> Atenção</Badge>
+                      ) : (
+                        <Badge tone="forest"><CheckCircle size={12} /> No limite</Badge>
+                      )}
                       <div>
-                        <p className="font-semibold text-slate-900 dark:text-white">{row.category?.name || 'Categoria'}</p>
-                        <p className="text-xs text-slate-500">{MONTHS[(row.month || 1) - 1]}/{row.year}</p>
+                        <p className="font-semibold text-fincash-ink">{row.category?.name || 'Categoria'}</p>
+                        <p className="text-xs text-fincash-ink/50">{MONTHS[(row.month || 1) - 1]}/{row.year}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-slate-700 dark:text-slate-300">Limite: {currency(limit)}</span>
-                      <button onClick={() => handleEdit(row)} className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-amber-100 hover:text-amber-700 dark:hover:bg-amber-900/30">
+                      <span className="text-sm font-bold font-mono tabular-nums text-fincash-ink">Limite: {currency(limit)}</span>
+                      <button onClick={() => handleEdit(row)} className="flex h-7 w-7 items-center justify-center rounded-lg text-fincash-ink/40 hover:bg-fincash-ink/5 hover:text-fincash-ink">
                         <Pencil size={13} />
                       </button>
-                      <button onClick={() => remove(row.id)} className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-red-100 hover:text-red-700 dark:hover:bg-red-900/30">
+                      <button onClick={() => remove(row.id)} className="flex h-7 w-7 items-center justify-center rounded-lg text-fincash-ink/40 hover:bg-fincash-terracotta/10 hover:text-fincash-terracotta">
                         <Trash2 size={13} />
                       </button>
                     </div>
                   </div>
-                  <div className="mb-1 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-                    <div className={`h-2 rounded-full transition-all ${over ? 'bg-red-500' : warn ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${pct}%` }} />
+                  
+                  <ProgressBar value={pct} className="mb-1" />
+                  
+                  <div className="flex justify-between text-xs text-fincash-ink/50">
+                    <span>{spent > 0 ? currency(spent) : 'Nenhum gasto'} utilizado</span>
+                    <span className="font-mono tabular-nums">{pct.toFixed(0)}%</span>
                   </div>
-                  <p className="text-xs text-slate-500">{pct.toFixed(0)}% utilizado{over && ' — limite excedido!'}</p>
                 </div>
               );
             })}
@@ -249,36 +258,36 @@ export default function Budgets() {
           {!templateMode && (
             <>
               <div className="sm:col-span-2">
-                <label className="mb-1 block text-xs font-semibold text-slate-500">Categoria de despesa</label>
+                <label className="mb-1 block text-xs font-semibold text-fincash-ink/60">Categoria de despesa</label>
                 <select {...register('categoryId')} required>
                   <option value="">Selecione a categoria</option>
                   {categories.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-500">Limite mensal (R$)</label>
+                <label className="mb-1 block text-xs font-semibold text-fincash-ink/60">Limite mensal (R$)</label>
                 <input {...register('limitAmount')} type="number" step="0.01" placeholder="0,00" required />
               </div>
             </>
           )}
           {templateMode && (
-            <div className="sm:col-span-2 rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
-              <p className="text-xs text-slate-600 dark:text-slate-400">
+            <div className="sm:col-span-2 rounded-lg bg-fincash-ink/5 p-3">
+              <p className="text-xs text-fincash-ink/60">
                 Será criado um orçamento para cada categoria do template abaixo para o mês e ano selecionados.
               </p>
             </div>
           )}
           <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-500">Mês</label>
+            <label className="mb-1 block text-xs font-semibold text-fincash-ink/60">Mês</label>
             <select {...register('month')}>
               {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-500">Ano</label>
+            <label className="mb-1 block text-xs font-semibold text-fincash-ink/60">Ano</label>
             <input {...register('year')} type="number" min="2000" />
           </div>
-          <button type="submit" className="sm:col-span-2 rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700">
+          <button type="submit" className="sm:col-span-2 rounded-xl bg-fincash-forest px-4 py-3 font-semibold text-white hover:opacity-90">
             {templateMode ? 'Aplicar template' : 'Salvar orçamento'}
           </button>
         </form>

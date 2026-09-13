@@ -4,13 +4,13 @@ export default function FormModal({ open, title, onClose, children }) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl dark:bg-slate-900">
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-800">
-          <h3 className="font-bold text-slate-900 dark:text-white">{title}</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-fincash-ink/60 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-2xl rounded-2xl border border-fincash-ink/10 bg-white shadow-floating">
+        <div className="flex items-center justify-between border-b border-fincash-ink/10 px-5 py-4">
+          <h3 className="font-bold text-fincash-ink">{title}</h3>
           <button
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-fincash-ink/40 transition hover:bg-fincash-ink/5 hover:text-fincash-ink"
           >
             <X size={16} />
           </button>

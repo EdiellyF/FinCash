@@ -14,8 +14,11 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['Work Sans', 'sans-serif'],
-        mono: ['IBM Plex Mono', 'monospace'],
+        sans: ['"Work Sans"', 'sans-serif'],
+        mono: ['"IBM Plex Mono"', 'monospace'],
+      },
+      boxShadow: {
+        floating: '0 8px 24px rgba(45,42,38,0.12)',
       },
     }
   },

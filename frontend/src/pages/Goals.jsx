@@ -3,10 +3,12 @@ import { useForm } from 'react-hook-form';
 import AppShell from '../components/layout/AppShell';
 import PageCard from '../components/ui/PageCard';
 import FormModal from '../components/ui/FormModal';
+import ProgressBar from '../components/ui/ProgressBar';
+import Badge from '../components/ui/Badge';
 import { currency, dateBR } from '../utils/format';
 import api from '../services/api';
 import { toast } from 'sonner';
-import { Target, Pencil, Trash2, Plus, Trophy, Lightbulb } from 'lucide-react';
+import { Target, Pencil, Trash2, Plus, Trophy } from 'lucide-react';
 
 const initial = { title: '', targetAmount: '', currentAmount: 0, deadline: '' };
 
