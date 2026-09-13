@@ -8,6 +8,7 @@ import TransactionExtraction from '../components/ui/TransactionExtraction';
 import { currency, dateBR } from '../utils/format';
 import api from '../services/api';
 import { toast } from 'sonner';
+import { Plus } from 'lucide-react';
 
 
 const emptyForm = {
@@ -106,7 +107,9 @@ export default function Transactions() {
         actions={
           <div className="flex gap-3">
             <TransactionExtraction onTransactionsSaved={loadTransactions} />
-            <button onClick={handleNew} className="rounded-2xl bg-blue-600 px-4 py-3 font-semibold text-white">Nova transação</button>
+            <button onClick={handleNew} className="flex items-center gap-2 rounded-sm bg-fincash-forest px-4 py-3 font-semibold text-fincash-cream">
+              <Plus size={16} /> Nova transação
+            </button>
           </div>
         }
       >
@@ -124,8 +127,8 @@ export default function Transactions() {
           <input type="date" value={filters.endDate} onChange={(e) => setFilters({ ...filters, endDate: e.target.value })} />
         </div>
         <div className="mb-4 flex gap-3">
-          <button onClick={() => loadTransactions()} className="rounded-2xl bg-slate-900 px-4 py-3 text-white dark:bg-slate-700">Filtrar</button>
-          <button onClick={() => { const cleared = { type: '', categoryId: '', startDate: '', endDate: '' }; setFilters(cleared); loadTransactions(cleared); }} className="rounded-2xl border border-slate-300 px-4 py-3 dark:border-slate-700">Limpar</button>
+          <button onClick={() => loadTransactions()} className="rounded-sm bg-fincash-ink px-4 py-3 text-fincash-cream dark:bg-fincash-ink/80">Filtrar</button>
+          <button onClick={() => { const cleared = { type: '', categoryId: '', startDate: '', endDate: '' }; setFilters(cleared); loadTransactions(cleared); }} className="rounded-sm border border-fincash-ink/10 px-4 py-3 dark:border-fincash-cream/10">Limpar</button>
         </div>
 
         <BasicTable
@@ -133,14 +136,14 @@ export default function Transactions() {
             { key: 'title', label: 'Título' },
             { key: 'category', label: 'Categoria', render: (row) => row.category?.name || '-' },
             { key: 'type', label: 'Tipo', render: (row) => row.type === 'income' ? 'Receita' : 'Despesa' },
-            { key: 'amount', label: 'Valor', render: (row) => currency(row.amount) },
+            { key: 'amount', label: 'Valor', render: (row) => <span className="font-money">{currency(row.amount)}</span> },
             { key: 'transactionDate', label: 'Data', render: (row) => dateBR(row.transactionDate) }
           ]}
           rows={transactions}
           renderActions={(row) => (
             <div className="flex gap-2">
-              <button onClick={() => handleEdit(row)} className="rounded-xl bg-amber-500 px-3 py-2 text-white">Editar</button>
-              <button onClick={() => remove(row.id)} className="rounded-xl bg-red-600 px-3 py-2 text-white">Excluir</button>
+              <button onClick={() => handleEdit(row)} className="rounded-sm bg-fincash-gold px-3 py-2 text-fincash-ink">Editar</button>
+              <button onClick={() => remove(row.id)} className="rounded-sm bg-fincash-terracotta px-3 py-2 text-fincash-cream">Excluir</button>
             </div>
           )}
         />
@@ -160,7 +163,7 @@ export default function Transactions() {
           <input {...register('amount')} type="number" step="0.01" placeholder="Valor" />
           <input {...register('transactionDate')} type="date" />
           <input {...register('description')} placeholder="Descrição" className="md:col-span-2" />
-          <button className="rounded-2xl bg-blue-600 px-4 py-3 font-semibold text-white md:col-span-2">
+          <button className="rounded-sm bg-fincash-forest px-4 py-3 font-semibold text-fincash-cream md:col-span-2">
             {editing ? 'Salvar alterações' : 'Cadastrar transação'}
           </button>
         </form>

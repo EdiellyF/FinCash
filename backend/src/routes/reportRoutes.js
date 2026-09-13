@@ -65,7 +65,7 @@ router.use(authMiddleware);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/monthly', validate(monthlyReportSchema), monthly);
+router.get('/monthly', validate(monthlyReportSchema, 'query'), monthly);
 
 /**
  * @swagger
@@ -117,7 +117,7 @@ router.get('/monthly', validate(monthlyReportSchema), monthly);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/category', validate(categorySummarySchema), categorySummary);
+router.get('/category', validate(categorySummarySchema, 'query'), categorySummary);
 
 /**
  * @swagger
@@ -169,7 +169,7 @@ router.get('/category', validate(categorySummarySchema), categorySummary);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/export/csv', validate(exportCsvSchema), exportCsv);
+router.get('/export/csv', validate(exportCsvSchema, 'query'), exportCsv);
 
 /**
  * @swagger
@@ -216,7 +216,7 @@ router.get('/export/csv', validate(exportCsvSchema), exportCsv);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/export/pdf', validate(exportPdfSchema), exportPdf);
+router.get('/export/pdf', validate(exportPdfSchema, 'query'), exportPdf);
 
 /**
  * @swagger
@@ -251,7 +251,7 @@ router.get('/export/pdf', validate(exportPdfSchema), exportPdf);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/export/goals-csv', validate(exportGoalsCsvSchema), exportGoalsCsv);
+router.get('/export/goals-csv', validate(exportGoalsCsvSchema, 'query'), exportGoalsCsv);
 
 /**
  * @swagger
@@ -298,6 +298,6 @@ router.get('/export/goals-csv', validate(exportGoalsCsvSchema), exportGoalsCsv);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/export/budgets-csv', validate(exportBudgetsCsvSchema), exportBudgetsCsv);
+router.get('/export/budgets-csv', validate(exportBudgetsCsvSchema, 'query'), exportBudgetsCsv);
 
 export default router;
