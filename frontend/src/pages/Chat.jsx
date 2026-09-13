@@ -179,7 +179,7 @@ export default function Chat() {
 
   const loadHistory = async () => {
     try {
-      const response = await api.get('/api/chat/history');
+      const response = await api.get('/chat/history');
       if (response.data.length > 0) {
         setMessages(response.data);
         setShowAnalysisOptions(false);
@@ -191,7 +191,7 @@ export default function Chat() {
 
   const loadLimits = async () => {
     try {
-      const response = await api.get('/api/chat/limits');
+      const response = await api.get('/chat/limits');
       setLimits(response.data);
     } catch (error) {
       console.error('Erro ao carregar limites:', error);
@@ -229,7 +229,7 @@ export default function Chat() {
           isStreaming: true 
         }]);
 
-        await api.post('/api/chat/message-stream', {
+        await api.post('/chat/message-stream', {
           message: messageToSend,
           period: selectedPeriod,
           socketId: socketRef.current.id
@@ -239,7 +239,7 @@ export default function Chat() {
         setIsStreaming(false);
       } else {
         // Fallback para método tradicional sem streaming
-        const response = await api.post('/api/chat/message', { message: messageToSend, period: selectedPeriod });
+        const response = await api.post('/chat/message', { message: messageToSend, period: selectedPeriod });
         
         let cleanContent = response.data.message;
         const hashIndex = cleanContent.indexOf('##');
@@ -283,7 +283,7 @@ export default function Chat() {
   const handleComparePeriods = async () => {
     try {
       setCompareLoading(true);
-      const response = await api.post('/api/chat/compare', {
+      const response = await api.post('/chat/compare', {
         periods: ['7d', '30d', '365d']
       });
       setCompareData(response.data);
@@ -299,7 +299,7 @@ export default function Chat() {
   const exportAnalysis = async (format = 'txt') => {
     if (format === 'pdf') {
       try {
-        const response = await api.get('/api/chat/export-pdf', {
+        const response = await api.get('/chat/export-pdf', {
           responseType: 'blob',
         });
         const url = window.URL.createObjectURL(new Blob([response.data]));
