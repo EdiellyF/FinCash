@@ -77,7 +77,7 @@ export default function PrivacyPolicy() {
                 {policy?.title || 'Política de Privacidade'}
               </h1>
               <p className="text-fincash-ink/60 mt-1">
-                Versão {policy?.version || '1.0'} • Atualizado em {policy?.lastUpdated || '2024-01-01'}
+                Versão {policy?.version || '1.0'} • Atualizado em {policy?.lastUpdated || '13-09-2026'}
               </p>
             </div>
           </div>
