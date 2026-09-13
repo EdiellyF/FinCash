@@ -1,6 +1,8 @@
 import express from 'express';
 import { getUserStats, getUsageHistory } from '../controllers/statsController.js';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
+import { validate } from '../middlewares/validateMiddleware.js';
+import { getUserStatsSchema, getUsageHistorySchema } from '../validations/statsValidation.js';
 
 const router = express.Router();
 
@@ -41,7 +43,7 @@ const router = express.Router();
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/user', authMiddleware, getUserStats);
+router.get('/user', authMiddleware, validate(getUserStatsSchema), getUserStats);
 
 /**
  * @swagger
@@ -80,6 +82,6 @@ router.get('/user', authMiddleware, getUserStats);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/history', authMiddleware, getUsageHistory);
+router.get('/history', authMiddleware, validate(getUsageHistorySchema), getUsageHistory);
 
 export default router;

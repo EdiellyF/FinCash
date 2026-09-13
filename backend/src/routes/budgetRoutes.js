@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
 import { validate } from '../middlewares/validateMiddleware.js';
 import { budgetSchema } from '../validations/budgetValidation.js';
+import { listBudgetsSchema } from '../validations/listValidation.js';
 import { create, list, remove, update } from '../controllers/budgetController.js';
 
 const router = Router();
@@ -36,7 +37,7 @@ router.use(authMiddleware);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/', list);
+router.get('/', validate(listBudgetsSchema), list);
 
 /**
  * @swagger

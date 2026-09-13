@@ -31,7 +31,12 @@ export async function updateCategory(userId, id, data) {
 
   return prisma.category.update({
     where: { id },
-    data
+    data: {
+      name: data.name,
+      type: data.type,
+      color: data.color,
+      icon: data.icon
+    }
   });
 }
 

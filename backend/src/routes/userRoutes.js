@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { me, updateProfile, deleteProfile } from '../controllers/userController.js';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
+import { validate } from '../middlewares/validateMiddleware.js';
+import { updateProfileSchema, deleteAccountSchema } from '../validations/userValidation.js';
 
 const router = Router();
 
@@ -78,7 +80,7 @@ router.get('/me', me);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.put('/me', updateProfile);
+router.put('/me', validate(updateProfileSchema), updateProfile);
 
 /**
  * @swagger
@@ -106,6 +108,6 @@ router.put('/me', updateProfile);
  *       401:
  *         description: Unauthorized
  */
-router.delete('/me', deleteProfile);
+router.delete('/me', validate(deleteAccountSchema), deleteProfile);
 
 export default router;

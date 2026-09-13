@@ -14,7 +14,7 @@ import { ValidationError, NotFoundError, ConflictError } from '../utils/errors.j
 import { logger } from '../config/logger.js';
 
 export async function register(req, res) {
-  logger.info('User registration attempt', { email: req.validatedData.email });
+  logger.info('User registration attempt');
   const result = await registerUser(req.validatedData);
   logger.info('User registered successfully', { userId: result.user.id });
   // result contains { user, totpUri, backupCodes }
@@ -22,7 +22,7 @@ export async function register(req, res) {
 }
 
 export async function login(req, res) {
-  logger.info('User login attempt', { email: req.validatedData.email });
+  logger.info('User login attempt');
   const result = await loginUser(req.validatedData);
   logger.info('User logged in successfully', { userId: result.user.id });
   return ok(res, result, 'Login realizado com sucesso.');
@@ -44,14 +44,14 @@ export async function refresh(req, res) {
 
 export async function totpConfirmController(req, res) {
   const { email, totpCode } = req.validatedData;
-  logger.info('TOTP confirmation attempt', { email });
+  logger.info('TOTP confirmation attempt');
   const result = await confirmTotp(email, totpCode);
   return ok(res, result, 'TOTP confirmado com sucesso.');
 }
 
 export async function backupLoginController(req, res) {
   const { email, backupCode } = req.validatedData;
-  logger.info('Backup login attempt', { email });
+  logger.info('Backup login attempt');
   const result = await backupLogin(email, backupCode);
   logger.info('Backup login successful', { userId: result.user.id });
   return ok(res, result, 'Login via código de backup realizado com sucesso.');
@@ -59,15 +59,12 @@ export async function backupLoginController(req, res) {
 
 export async function resetPasswordWithBackupCodeController(req, res) {
   const { email, backupCode, newPassword } = req.validatedData;
-  logger.info('Password reset with backup code attempt', { email });
+  logger.info('Password reset with backup code attempt');
   const result = await resetPasswordWithBackupCode(email, backupCode, newPassword);
   return ok(res, result, 'Senha redefinida com sucesso.');
 }
 
 export async function resetTotpController(req, res) {
-  // This endpoint supports two modes:
-  // - authenticated user (req.user) can request action: generate_backup or reset_totp
-  // - unauthenticated user can provide email + backupCode to authenticate, which will consume that backup code, then reset TOTP
   const action = req.validatedData.action || 'generate_backup';
 
   if (req.user?.id) {
@@ -84,8 +81,6 @@ export async function resetTotpController(req, res) {
   } else {
     const { email, backupCode } = req.validatedData;
     if (!email || !backupCode) throw new ValidationError('Email e código de backup são necessários para reset sem autenticação.');
-
-    // backupLogin will consume the provided backup code
     const loginResult = await backupLogin(email, backupCode);
     const userId = loginResult.user.id;
 

@@ -1,12 +1,14 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
-import { 
-  getSuggestion, 
-  batchCategorize, 
-  autoCategorize 
+import { validate } from '../middlewares/validateMiddleware.js';
+import {
+  getSuggestion,
+  batchCategorize,
+  autoCategorize
 } from '../controllers/categorizationController.js';
 import { z } from 'zod';
 import { ValidationError } from '../utils/errors.js';
+import { batchCategorizeSchema } from '../validations/categorizationValidation.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -135,7 +137,7 @@ router.post('/suggest', async (req, res, next) => {
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/batch', batchCategorize);
+router.get('/batch', validate(batchCategorizeSchema), batchCategorize);
 
 /**
  * @swagger
