@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import { Shield, Eye, Lock, Share2, Trash2, Mail, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Shield, Eye, Lock, Share2, Trash2, Mail, ChevronDown, ChevronUp, X, AlertCircle } from 'lucide-react';
 import api from '../../services/api';
 
 export default function PrivacyPolicy({ isOpen, onClose, onAccept }) {
   const [policy, setPolicy] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [expandedSections, setExpandedSections] = useState({});
 
   const sections = [
@@ -25,22 +26,30 @@ export default function PrivacyPolicy({ isOpen, onClose, onAccept }) {
     }));
   };
 
-  const fetchPolicy = async () => {
-    if (policy) return;
-    setLoading(true);
-    try {
-      const response = await api.get('/legal/privacy-policy');
-      setPolicy(response.data);
-    } catch (error) {
-      console.error('Erro ao carregar política de privacidade:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    if (!isOpen || policy) return;
 
-  if (isOpen) {
+    let mounted = true;
+
+    async function fetchPolicy() {
+      setLoading(true);
+      setError('');
+      try {
+        const response = await api.get('/legal/privacy-policy');
+        if (mounted) setPolicy(response.data);
+      } catch (err) {
+        if (mounted) setError(err.response?.data?.message || 'Não foi possível carregar a política de privacidade.');
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+
     fetchPolicy();
-  }
+
+    return () => {
+      mounted = false;
+    };
+  }, [isOpen, policy]);
 
   if (!isOpen) return null;
 
@@ -72,6 +81,14 @@ export default function PrivacyPolicy({ isOpen, onClose, onAccept }) {
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent" />
+          </div>
+        ) : error ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
+            <div className="flex items-center gap-3">
+              <AlertCircle size={20} />
+              <p className="font-semibold">Erro ao carregar política</p>
+            </div>
+            <p className="mt-2 text-sm">{error}</p>
           </div>
         ) : policy ? (
           <div className="space-y-4">

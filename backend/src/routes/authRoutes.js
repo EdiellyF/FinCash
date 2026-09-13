@@ -1,11 +1,10 @@
 import { Router } from 'express';
 import {
-  forgotPasswordController,
   login,
   logout,
   refresh,
   register,
-  resetPasswordController,
+  resetPasswordWithBackupCodeController,
   totpConfirmController,
   backupLoginController,
   resetTotpController
@@ -14,12 +13,11 @@ import { validate } from '../middlewares/validateMiddleware.js';
 import { rateLimiter } from '../middlewares/rateLimiter.js';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
 import {
-  forgotPasswordSchema,
   loginSchema,
   logoutSchema,
   refreshTokenSchema,
   registerSchema,
-  resetPasswordSchema,
+  resetPasswordWithBackupCodeSchema,
   totpConfirmSchema,
   backupLoginSchema,
   totpResetSchema
@@ -75,6 +73,12 @@ router.post('/register', validate(registerSchema), register);
 router.post('/totp/confirm', rateLimiter(5, 60000), validate(totpConfirmSchema), totpConfirmController);
 router.post('/totp/backup-login', rateLimiter(5, 60000), validate(backupLoginSchema), backupLoginController);
 router.post('/totp/reset', validate(totpResetSchema), resetTotpController);
+router.post(
+  '/reset-password-with-backup-code',
+  rateLimiter(5, 60000),
+  validate(resetPasswordWithBackupCodeSchema),
+  resetPasswordWithBackupCodeController
+);
 
 /**
  * @swagger
@@ -150,81 +154,6 @@ router.post('/refresh', rateLimiter(5, 60000), validate(refreshTokenSchema), ref
  *               $ref: '#/components/schemas/Error'
  */
 router.post('/logout', authMiddleware, validate(logoutSchema), logout);
-
-/**
- * @swagger
- * /api/auth/forgot-password:
- *   post:
- *     summary: Request password reset
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: "john@example.com"
- *     responses:
- *       200:
- *         description: Password reset email sent
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Success'
- *       404:
- *         description: User not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- */
-router.post('/forgot-password', validate(forgotPasswordSchema), forgotPasswordController);
-
-/**
- * @swagger
- * /api/auth/reset-password:
- *   post:
- *     summary: Reset password with token
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - newPassword
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: "john@example.com"
- *               newPassword:
- *                 type: string
- *                 minLength: 6
- *                 example: "newpassword123"
- *     responses:
- *       200:
- *         description: Password reset successful
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Success'
- *       400:
- *         description: Invalid token or password
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- */
-router.post('/reset-password', validate(resetPasswordSchema), resetPasswordController);
 
 
 

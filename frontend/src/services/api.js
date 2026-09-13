@@ -9,7 +9,7 @@ const api = axios.create({
     : '/api'
 });
 
-const isPublicAuthRoute = (url = '') => /\/auth\/(login|register|refresh)($|\?)/i.test(url);
+const isPublicAuthRoute = (url = '') => /\/auth\/(login|register|refresh|reset-password-with-backup-code)($|\?)/i.test(url);
 
 let refreshAccessTokenPromise = null;
 

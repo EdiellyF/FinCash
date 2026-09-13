@@ -49,12 +49,6 @@ export const env = {
   geminiApiKey: sanitizeApiKey(process.env.GEMINI_API_KEY),
   geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-pro',
   groqApiKey: sanitizeApiKey(process.env.GROQ_API_KEY),
-  resendApiKey: sanitizeApiKey(process.env.RESEND_API_KEY),
-  smtpHost: process.env.SMTP_HOST,
-  smtpPort: Number(process.env.SMTP_PORT || 587),
-  smtpUser: process.env.SMTP_USER,
-  smtpPass: process.env.SMTP_PASS,
-  smtpFrom: process.env.SMTP_FROM,
   // Comma-separated provider priority, e.g. 'groq,gemini'
   aiProviderPriority: process.env.AI_PROVIDER_PRIORITY || 'groq,gemini',
 

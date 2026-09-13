@@ -1,9 +1,8 @@
 import { created, ok } from '../utils/response.js';
 import {
-  forgotPassword,
   loginUser,
   registerUser,
-  resetPassword,
+  resetPasswordWithBackupCode,
   confirmTotp,
   backupLogin,
   generateNewBackupCodesForUserId,
@@ -43,19 +42,6 @@ export async function refresh(req, res) {
   return ok(res, result, 'Token renovado com sucesso.');
 }
 
-export async function forgotPasswordController(req, res) {
-  logger.info('Password reset requested', { email: req.validatedData.email });
-  const result = await forgotPassword(req.validatedData.email);
-  return ok(res, result, 'Solicitação de recuperação processada.');
-}
-
-export async function resetPasswordController(req, res) {
-  logger.info('Password reset attempt', { email: req.validatedData.email });
-  const result = await resetPassword(req.validatedData.email, req.validatedData.newPassword);
-  logger.info('Password reset successful', { email: req.validatedData.email });
-  return ok(res, result, 'Senha redefinida com sucesso.');
-}
-
 export async function totpConfirmController(req, res) {
   const { email, totpCode } = req.validatedData;
   logger.info('TOTP confirmation attempt', { email });
@@ -69,6 +55,13 @@ export async function backupLoginController(req, res) {
   const result = await backupLogin(email, backupCode);
   logger.info('Backup login successful', { userId: result.user.id });
   return ok(res, result, 'Login via código de backup realizado com sucesso.');
+}
+
+export async function resetPasswordWithBackupCodeController(req, res) {
+  const { email, backupCode, newPassword } = req.validatedData;
+  logger.info('Password reset with backup code attempt', { email });
+  const result = await resetPasswordWithBackupCode(email, backupCode, newPassword);
+  return ok(res, result, 'Senha redefinida com sucesso.');
 }
 
 export async function resetTotpController(req, res) {

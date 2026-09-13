@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Shield } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { AlertCircle, ChevronDown, ChevronUp, Shield, TrendingUp } from 'lucide-react';
 import api from '../services/api';
-import AppShell from '../components/layout/AppShell';
 
 export default function PrivacyPolicy() {
   const [policy, setPolicy] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [expandedSections, setExpandedSections] = useState({});
 
   const sections = [
@@ -29,34 +30,41 @@ export default function PrivacyPolicy() {
   useEffect(() => {
     let mounted = true;
     setLoading(true);
+    setError('');
     api.get('/legal/privacy-policy').then((resp) => {
       if (mounted) {
         setPolicy(resp.data);
         setLoading(false);
       }
-    }).catch(() => {
+    }).catch((err) => {
       if (mounted) {
-        setPolicy({ version: '1.0', content: { introduction: 'Política indisponível no momento.' } });
+        setError(err.response?.data?.message || 'Não foi possível carregar a política de privacidade.');
+        setPolicy(null);
         setLoading(false);
       }
     });
     return () => { mounted = false; };
   }, []);
 
-  if (loading) {
-    return (
-      <AppShell>
-        <div className="flex items-center justify-center py-12">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent" />
-        </div>
-      </AppShell>
-    );
-  }
-
   return (
-    <AppShell>
-      <div className="max-w-4xl mx-auto p-6">
-        <div className="mb-8">
+    <div className="min-h-screen bg-slate-100 p-4 dark:bg-slate-950">
+      <div className="mx-auto max-w-4xl">
+        <header className="mb-6 flex items-center justify-between rounded-2xl bg-white px-5 py-4 shadow-sm dark:bg-slate-900">
+          <Link to="/login" className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-600 text-white">
+              <TrendingUp size={20} />
+            </div>
+            <div>
+              <p className="text-sm font-bold leading-tight text-slate-900 dark:text-white">Finance</p>
+              <p className="text-xs font-semibold leading-tight text-emerald-600">FinCash</p>
+            </div>
+          </Link>
+          <Link to="/login" className="text-sm font-semibold text-emerald-600 hover:underline">
+            Voltar ao login
+          </Link>
+        </header>
+
+        <main className="rounded-2xl bg-white p-6 shadow-sm dark:bg-slate-900">
           <div className="flex items-center gap-4 mb-4">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
               <Shield size={32} />
@@ -70,8 +78,24 @@ export default function PrivacyPolicy() {
               </p>
             </div>
           </div>
-        </div>
 
+          {loading && (
+            <div className="flex items-center justify-center py-16">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent" />
+            </div>
+          )}
+
+          {!loading && error && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
+              <div className="flex items-center gap-3">
+                <AlertCircle size={20} />
+                <p className="font-semibold">Erro ao carregar política</p>
+              </div>
+              <p className="mt-2 text-sm">{error}</p>
+            </div>
+          )}
+
+          {!loading && !error && (
         <div className="space-y-4">
           <div className="rounded-xl bg-emerald-50 p-6 dark:bg-emerald-900/20">
             <p className="text-emerald-800 dark:text-emerald-300">
@@ -97,9 +121,11 @@ export default function PrivacyPolicy() {
                   <span className="font-semibold text-slate-900 dark:text-white">
                     {section.title}
                   </span>
-                  <span className="text-slate-400">
-                    {isExpanded ? '−' : '+'}
-                  </span>
+                  {isExpanded ? (
+                    <ChevronUp size={20} className="text-slate-400" />
+                  ) : (
+                    <ChevronDown size={20} className="text-slate-400" />
+                  )}
                 </button>
 
                 {isExpanded && (
@@ -144,7 +170,9 @@ export default function PrivacyPolicy() {
             </p>
           </div>
         </div>
+          )}
+        </main>
       </div>
-    </AppShell>
+    </div>
   );
 }
