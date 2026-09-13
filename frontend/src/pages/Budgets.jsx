@@ -3,10 +3,12 @@ import { useForm } from 'react-hook-form';
 import AppShell from '../components/layout/AppShell';
 import PageCard from '../components/ui/PageCard';
 import FormModal from '../components/ui/FormModal';
+import ProgressBar from '../components/ui/ProgressBar';
+import Badge from '../components/ui/Badge';
 import { currency } from '../utils/format';
 import api from '../services/api';
 import { toast } from 'sonner';
-import { Wallet, Plus, Pencil, Trash2, AlertTriangle, CheckCircle, Zap } from 'lucide-react';
+import { Wallet, Plus, Pencil, Trash2, AlertTriangle, CheckCircle } from 'lucide-react';
 
 const MONTHS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 const initial = { categoryId: '', month: new Date().getMonth() + 1, year: new Date().getFullYear(), limitAmount: '' };
