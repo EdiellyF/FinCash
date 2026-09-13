@@ -162,11 +162,28 @@ export async function saveExtractedTransactions(userId, transactions, options = 
     for (const tx of transactions) {
       try {
         // Encontrar categoria correspondente
-        const category = await findMatchingCategory(tx.category, tx.type, userId);
+        let category = await findMatchingCategory(tx.category, tx.type, userId);
 
+        // Se categoria não existir, criar automaticamente
         if (!category) {
-          logger.warn('Category not found for transaction', { category: tx.category, type: tx.type });
-          continue;
+          logger.info('Creating new category for extracted transaction', { 
+            category: tx.category, 
+            type: tx.type, 
+            userId 
+          });
+          
+          category = await prisma.category.create({
+            data: {
+              userId,
+              name: tx.category || 'Outros',
+              type: tx.type,
+              color: '#64748b',
+              icon: 'tag',
+              isDefault: false
+            }
+          });
+          
+          logger.info('Category created successfully', { categoryId: category.id, name: category.name });
         }
 
         const transaction = await prisma.transaction.create({

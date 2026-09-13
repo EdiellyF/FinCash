@@ -2,12 +2,15 @@ import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { toast } from 'sonner';
-import { TrendingUp, LogIn } from 'lucide-react';
+import { TrendingUp, LogIn, Shield } from 'lucide-react';
+import { useState } from 'react';
+import PrivacyPolicy from '../components/ui/PrivacyPolicy';
 
 export default function Login() {
   const { register: registerInput, handleSubmit, formState: { isSubmitting } } = useForm();
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
 
   async function onSubmit(values) {
     try {
@@ -59,7 +62,22 @@ export default function Login() {
             <Link to="/register" className="font-medium text-emerald-600 hover:underline">Criar conta</Link>
             <Link to="/backup-login" className="font-medium text-slate-500 hover:underline">Perdi meu código</Link>
           </div>
+          <div className="mt-4 text-center">
+            <button
+              type="button"
+              onClick={() => setShowPrivacyPolicy(true)}
+              className="flex items-center justify-center gap-2 text-sm text-slate-500 hover:text-emerald-600 transition-colors"
+            >
+              <Shield size={14} />
+              <span>Política de Privacidade</span>
+            </button>
+          </div>
         </form>
+
+        <PrivacyPolicy
+          isOpen={showPrivacyPolicy}
+          onClose={() => setShowPrivacyPolicy(false)}
+        />
       </div>
     </div>
   );
