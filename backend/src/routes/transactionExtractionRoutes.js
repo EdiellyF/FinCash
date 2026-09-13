@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
-import { 
-  extractTransactions, 
+import {
+  extractTransactions,
   extractTransactionsPDF,
   extractAndSaveTransactions,
   saveTransactions
 } from '../controllers/transactionExtractionController.js';
+import { prisma } from '../config/db.js';
 
 const router = Router();
 const upload = multer({
@@ -28,6 +29,38 @@ const upload = multer({
   }
 });
 router.use(authMiddleware);
+
+const MAX_EXTRACTIONS_PER_DAY = 4;
+
+router.get('/extraction-limits', async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const log = await prisma.requestLog.findUnique({
+      where: {
+        userId_date_provider: {
+          userId: req.user.id,
+          date: today,
+          provider: 'transaction_extraction',
+        },
+      },
+    });
+
+    const usedCount = log ? log.count : 0;
+    const remainingCount = Math.max(0, MAX_EXTRACTIONS_PER_DAY - usedCount);
+
+    return res.json({
+      used: usedCount,
+      remaining: remainingCount,
+      limit: MAX_EXTRACTIONS_PER_DAY,
+      resetDate: new Date(today.getTime() + 24 * 60 * 60 * 1000).toISOString()
+    });
+  } catch (error) {
+    console.error('Error getting extraction limits:', error);
+    return res.status(500).json({ message: 'Erro ao verificar limites de extração.' });
+  }
+});
 
 /**
  * @swagger

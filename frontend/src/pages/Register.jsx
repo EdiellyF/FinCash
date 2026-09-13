@@ -2,8 +2,10 @@ import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { toast } from 'sonner';
-import { TrendingUp, UserPlus } from 'lucide-react';
+import { TrendingUp, UserPlus, Shield } from 'lucide-react';
 import validator from 'validator';
+import { useState } from 'react';
+import PrivacyPolicy from '../components/ui/PrivacyPolicy';
 
 export default function Register() {
   const {
@@ -13,8 +15,15 @@ export default function Register() {
   } = useForm();
   const { register } = useAuth();
   const navigate = useNavigate();
+  const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
 
   async function onSubmit(values) {
+    if (!privacyAccepted) {
+      toast.error('Você precisa aceitar a política de privacidade para criar uma conta.');
+      return;
+    }
+
     try {
       const result = await register(values);
 
@@ -91,6 +100,33 @@ export default function Register() {
               {errors.password && <p className="mt-1 text-sm text-red-500">{errors.password.message}</p>}
             </div>
 
+            <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
+              <input
+                type="checkbox"
+                id="privacy"
+                {...reg('privacy', {
+                  required: 'Você precisa aceitar a política de privacidade.'
+                })}
+                checked={privacyAccepted}
+                onChange={(e) => setPrivacyAccepted(e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+              />
+              <div className="flex-1">
+                <label htmlFor="privacy" className="text-sm text-slate-700 dark:text-slate-300">
+                  Eu li e aceito a{' '}
+                  <button
+                    type="button"
+                    onClick={() => setShowPrivacyPolicy(true)}
+                    className="font-medium text-emerald-600 hover:underline"
+                  >
+                    Política de Privacidade
+                  </button>
+                </label>
+                {errors.privacy && (
+                  <p className="mt-1 text-sm text-red-500">{errors.privacy.message}</p>
+                )}
+              </div>
+            </div>
 
             <button
               type="submit"
@@ -106,6 +142,12 @@ export default function Register() {
             <Link to="/login" className="font-medium text-emerald-600 hover:underline">Entrar</Link>
           </p>
         </form>
+
+        <PrivacyPolicy
+          isOpen={showPrivacyPolicy}
+          onClose={() => setShowPrivacyPolicy(false)}
+          onAccept={() => setPrivacyAccepted(true)}
+        />
       </div>
     </div>
   );

@@ -11,54 +11,59 @@ import { Wallet, Plus, Pencil, Trash2, AlertTriangle, CheckCircle, Zap } from 'l
 const MONTHS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 const initial = { categoryId: '', month: new Date().getMonth() + 1, year: new Date().getFullYear(), limitAmount: '' };
 
-// Modelos de orçamento para estudantes
+// Modelos de orçamento para estudantes (Valores atualizados para realidade de Palmas/TO)
 const BUDGET_TEMPLATES = [
   {
     name: '💼 Estudante Bolsista',
-    description: 'Para estudantes com bolsa-auxílio (R$ 400-600/mês)',
+    description: 'Para estudantes com bolsa-auxílio (R$ 400-600/mês) - Foco em economia',
     budgets: [
-      { category: 'Alimentação', limit: 150 },
-      { category: 'Transporte para Faculdade', limit: 50 },
+      { category: 'Restaurante Universitário', limit: 120 }, // ~R$ 4/dia (almoço)
+      { category: 'Transporte para Faculdade', limit: 90 }, // ~R$ 4,50 x 20 dias
+      { category: 'Alimentação', limit: 100 }, // jantar e finais de semana
       { category: 'Materiais de Estudo', limit: 50 },
-      { category: 'Lazer', limit: 50 },
-      { category: 'Saúde', limit: 50 },
+      { category: 'Saúde', limit: 30 },
+      { category: 'Lazer', limit: 30 },
     ]
   },
   {
     name: '👷 Estudante Trabalhador',
     description: 'Para estudantes com renda de trabalho (R$ 1.200-2.000/mês)',
     budgets: [
-      { category: 'Moradia', limit: 500 },
-      { category: 'Alimentação', limit: 300 },
-      { category: 'Transporte para Faculdade', limit: 100 },
-      { category: 'Materiais de Estudo', limit: 100 },
-      { category: 'Lazer', limit: 100 },
-      { category: 'Saúde', limit: 100 },
+      { category: 'Moradia', limit: 400 }, // aluguel modesto em Palmas
+      { category: 'Alimentação', limit: 400 }, // refeições completas
+      { category: 'Transporte para Faculdade', limit: 90 }, // transporte urbano
+      { category: 'Materiais de Estudo', limit: 80 },
+      { category: 'Lazer', limit: 150 },
+      { category: 'Saúde', limit: 80 },
       { category: 'Educação', limit: 100 },
+      { category: 'Cursos Complementares', limit: 80 }, // cursos extras
     ]
   },
   {
     name: '🏠 Estudante em República',
-    description: 'Para estudantes dividindo casa com outros (R$ 800-1.500/mês)',
+    description: 'Para estudantes dividindo casa (R$ 350-500/mês de aluguel)',
     budgets: [
-      { category: 'Alojamento/República', limit: 300 },
-      { category: 'Alimentação', limit: 250 },
-      { category: 'Transporte para Faculdade', limit: 80 },
-      { category: 'Materiais de Estudo', limit: 80 },
-      { category: 'Lazer', limit: 100 },
-      { category: 'Saúde', limit: 50 },
+      { category: 'Alojamento/República', limit: 400 }, // aluguel + contas divididas
+      { category: 'Restaurante Universitário', limit: 120 }, // almoço no RU
+      { category: 'Alimentação', limit: 200 }, // jantar e fins de semana
+      { category: 'Transporte para Faculdade', limit: 90 },
+      { category: 'Materiais de Estudo', limit: 60 },
+      { category: 'Lazer', limit: 80 },
+      { category: 'Saúde', limit: 40 },
+      { category: 'Cursos Complementares', limit: 50 }, // cursos extras
     ]
   },
   {
     name: '👨‍👩‍👧‍👦 Morando com Familiares',
-    description: 'Para estudantes que moram em casa dos pais (R$ 500-900/mês)',
+    description: 'Para estudantes em casa dos pais (renda própria R$ 300-800/mês)',
     budgets: [
-      { category: 'Transporte para Faculdade', limit: 100 },
-      { category: 'Alimentação', limit: 150 },
-      { category: 'Materiais de Estudo', limit: 100 },
-      { category: 'Lazer', limit: 150 },
+      { category: 'Transporte para Faculdade', limit: 90 },
+      { category: 'Alimentação', limit: 150 }, // alimentação fora de casa
+      { category: 'Materiais de Estudo', limit: 80 },
+      { category: 'Lazer', limit: 120 },
       { category: 'Saúde', limit: 50 },
-      { category: 'Educação', limit: 100 },
+      { category: 'Educação', limit: 80 },
+      { category: 'Transporte', limit: 50 }, // transporte adicional
     ]
   },
 ];

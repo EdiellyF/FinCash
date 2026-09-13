@@ -22,6 +22,8 @@ const defaults = [
   { name: 'Restaurante Universitário', type: 'expense', isDefault: true, color: '#f43f5e', icon: 'utensils' },
   { name: 'Alojamento/República', type: 'expense', isDefault: true, color: '#d946ef', icon: 'home' },
   { name: 'Cursos Complementares', type: 'expense', isDefault: true, color: '#a855f7', icon: 'laptop' },
+  { name: 'Compras', type: 'expense', isDefault: true, color: '#f59e0b', icon: 'shopping-cart' },
+  { name: 'Internet/Comunicação', type: 'expense', isDefault: true, color: '#0ea5e9', icon: 'wifi' },
 ];
 
 async function main() {

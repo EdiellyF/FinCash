@@ -1,13 +1,66 @@
 import { ok, created } from '../utils/response.js';
-import { 
-  extractTransactionsFromText, 
+import {
+  extractTransactionsFromText,
   extractTransactionsFromPDF,
-  saveExtractedTransactions 
+  saveExtractedTransactions
 } from '../services/transactionExtractionService.js';
 import { ValidationError } from '../utils/errors.js';
 import { logger } from '../config/logger.js';
+import { prisma } from '../config/db.js';
 
 const MAX_PDF_SIZE_BYTES = 20 * 1024 * 1024;
+const MAX_EXTRACTIONS_PER_DAY = 4;
+
+async function checkExtractionLimit(userId) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const log = await prisma.requestLog.findUnique({
+    where: {
+      userId_date_provider: {
+        userId,
+        date: today,
+        provider: 'transaction_extraction',
+      },
+    },
+  });
+
+  return log ? log.count : 0;
+}
+
+async function incrementExtractionCount(userId) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const log = await prisma.requestLog.findUnique({
+    where: {
+      userId_date_provider: {
+        userId,
+        date: today,
+        provider: 'transaction_extraction',
+      },
+    },
+  });
+
+  if (!log) {
+    await prisma.requestLog.create({
+      data: {
+        userId,
+        date: today,
+        count: 1,
+        provider: 'transaction_extraction',
+      },
+    });
+    return 1;
+  }
+
+  await prisma.requestLog.update({
+    where: { id: log.id },
+    data: { count: log.count + 1 },
+  });
+
+  return log.count + 1;
+}
 
 function getPdfValidationFailure(file) {
   if (!file?.buffer || !Buffer.isBuffer(file.buffer) || file.buffer.length < 5) {
@@ -36,19 +89,37 @@ function isPdfFile(file) {
 
 export async function extractTransactions(req, res) {
   const { text } = req.body;
-  
+
   if (!text || text.trim().length === 0) {
     throw new ValidationError('Texto é obrigatório para extração de transações.');
   }
 
-  logger.info('Transaction extraction requested', { 
-    userId: req.user.id, 
-    textLength: text.length 
+  // Verificar limite diário de extrações
+  const extractionCount = await checkExtractionLimit(req.user.id);
+  if (extractionCount >= MAX_EXTRACTIONS_PER_DAY) {
+    logger.warn('Transaction extraction limit exceeded', {
+      userId: req.user.id,
+      extractionCount,
+      limit: MAX_EXTRACTIONS_PER_DAY
+    });
+    throw new ValidationError(`Você atingiu o limite diário de ${MAX_EXTRACTIONS_PER_DAY} extrações de transações. Tente novamente amanhã.`);
+  }
+
+  logger.info('Transaction extraction requested', {
+    userId: req.user.id,
+    textLength: text.length,
+    extractionCount: extractionCount + 1
   });
-  
+
   const result = await extractTransactionsFromText(req.user.id, text);
-  
-  return ok(res, result, 'Transações extraídas com sucesso.');
+
+  // Incrementar contador
+  await incrementExtractionCount(req.user.id);
+
+  return ok(res, {
+    ...result,
+    remainingExtractions: MAX_EXTRACTIONS_PER_DAY - (extractionCount + 1)
+  }, 'Transações extraídas com sucesso.');
 }
 
 export async function extractTransactionsPDF(req, res) {
@@ -58,6 +129,17 @@ export async function extractTransactionsPDF(req, res) {
       path: req.path
     });
     throw new ValidationError('Arquivo PDF e obrigatorio para extracao de transacoes.');
+  }
+
+  // Verificar limite diário de extrações
+  const extractionCount = await checkExtractionLimit(req.user.id);
+  if (extractionCount >= MAX_EXTRACTIONS_PER_DAY) {
+    logger.warn('Transaction extraction limit exceeded', {
+      userId: req.user.id,
+      extractionCount,
+      limit: MAX_EXTRACTIONS_PER_DAY
+    });
+    throw new ValidationError(`Você atingiu o limite diário de ${MAX_EXTRACTIONS_PER_DAY} extrações de transações. Tente novamente amanhã.`);
   }
 
   const failureReason = getPdfValidationFailure(req.file);
@@ -97,12 +179,19 @@ export async function extractTransactionsPDF(req, res) {
   logger.info('PDF transaction extraction requested', {
     userId: req.user.id,
     fileName: req.file.originalname,
-    fileSize: req.file.size
+    fileSize: req.file.size,
+    extractionCount: extractionCount + 1
   });
 
   const result = await extractTransactionsFromPDF(req.user.id, req.file.buffer);
 
-  return ok(res, result, 'Transacoes extraidas do PDF com sucesso.');
+  // Incrementar contador
+  await incrementExtractionCount(req.user.id);
+
+  return ok(res, {
+    ...result,
+    remainingExtractions: MAX_EXTRACTIONS_PER_DAY - (extractionCount + 1)
+  }, 'Transacoes extraidas do PDF com sucesso.');
 }
 
 export async function extractAndSaveTransactions(req, res) {
