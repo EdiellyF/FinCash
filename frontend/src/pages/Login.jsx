@@ -60,7 +60,10 @@ export default function Login() {
           </div>
           <div className="mt-5 flex justify-between text-sm">
             <Link to="/register" className="font-medium text-emerald-600 hover:underline">Criar conta</Link>
-            <Link to="/backup-login" className="font-medium text-slate-500 hover:underline">Perdi meu código</Link>
+            <Link to="/reset-password-with-backup-code" className="font-medium text-slate-500 hover:underline">Esqueci minha senha</Link>
+          </div>
+          <div className="mt-3 text-center text-sm">
+            <Link to="/backup-login" className="font-medium text-slate-500 hover:underline">Entrar com código de backup</Link>
           </div>
           <div className="mt-4 text-center">
             <button

@@ -65,14 +65,17 @@ Este projeto integra diversas disciplinas e conceitos:
 
 ### 🤖 Inteligência Artificial Avançada
 - 🧠 **Assistente Financeiro**: Análises personalizadas com múltiplos provedores
-- 🔄 **Priorização Inteligente**: GROQ > Gemini > Ollama (otimizado para custo/qualidade)
+- 🔄 **Priorização Inteligente**: GROQ > Gemini (otimizado para custo/qualidade)
 - 📊 **Contexto Dinâmico**: IA utiliza dados reais para insights relevantes
-- 🎯 **Limites Otimizados**: Sistema de limites para estudantes (2-5/dia por usuário)
+- 🎯 **Limites Otimizados**: Sistema de limites para estudantes (2-5/dia para chat, 4/dia para extração)
 - 💡 **Respostas Estruturadas**: Análises em seções detalhadas e acionáveis
 - 🏷️ **Categorização Automática**: Sugestões de categorias com confidence scores
 - 🔄 **Batch Processing**: Categorização em lote de transações existentes
 - 💬 **Conversação Contextual**: Histórico de interações e follow-up
 - 📊 **Comparativos**: Análise de evolução entre períodos diferentes
+- 🧾 **Extração de Transações**: Extração de transações de texto e PDF com IA
+- ✏️ **Edição de Transações Extraídas**: Edição inline de transações antes de salvar
+- 🏷️ **Criação Automática de Categorias**: Cria categorias automaticamente quando não existem
 
 ### 🔧 Qualidade e Performance (v2.0)
 - 📝 **API Documentation**: Swagger UI interativo com OpenAPI 3.0
@@ -125,6 +128,27 @@ Este projeto integra diversas disciplinas e conceitos:
 - Paginação em listagens com metadata
 - Connection pooling no Prisma
 - Otimizações de query com proper includes
+
+#### 🧾 Extração de Transações com IA (Novo)
+- Extração de transações de texto livre
+- Extração de transações de PDFs bancários
+- Edição inline de transações extraídas antes de salvar
+- Criação automática de categorias quando não existem
+- Limite de 4 extrações diárias por usuário
+- Interface moderna com validação e feedback visual
+
+#### 📋 Templates de Orçamento Realistas (Atualizado)
+- Templates ajustados para realidade de estudantes em Palmas/TO
+- 4 perfis: Bolsista, Trabalhador, República, Morando com Familiares
+- Valores baseados em custo de vida real (transporte R$ 4,50, RU, etc.)
+- Categorias específicas para estudantes universitários
+
+#### 🔒 Política de Privacidade Melhorada (Atualizado)
+- Política detalhada com seções organizadas
+- Informações claras sobre coleta, uso e proteção de dados
+- Direitos do usuário explicados em detalhes
+- Interface modal moderna com seções expansíveis
+- Aceitação obrigatória durante cadastro
 
 ---
 
@@ -323,6 +347,12 @@ Documentação completa disponível em [docs/](docs/)
 - `PUT /api/transactions/:id` - Atualizar
 - `DELETE /api/transactions/:id` - Remover
 
+### Extração de Transações com IA
+- `POST /api/transactions/extract` - Extrair transações de texto
+- `POST /api/transactions/extract-pdf` - Extrair transações de PDF
+- `POST /api/transactions/extract-save` - Salvar transações extraídas
+- `GET /api/transactions/extraction-limits` - Consultar limites de extração
+
 ### Categorias
 - `GET /api/categories` - Listar categorias
 - `POST /api/categories` - Criar categoria
@@ -380,6 +410,13 @@ SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=your-email@gmail.com
 SMTP_PASS=your-app-password
+```
+
+### Variáveis de Ambiente (Frontend)
+
+```env
+# API URL
+VITE_API_URL=http://localhost:5000
 ```
 
 ---

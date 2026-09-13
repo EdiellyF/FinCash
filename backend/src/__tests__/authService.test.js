@@ -27,7 +27,7 @@ vi.mock('bcryptjs', async () => {
 });
 
 import { prisma } from '../config/db.js';
-import { registerUser, loginUser, refreshUserSession, logoutUser } from '../services/authService.js';
+import { registerUser, loginUser, refreshUserSession, logoutUser, resetPasswordWithBackupCode } from '../services/authService.js';
 import { ConflictError, AuthenticationError } from '../utils/errors.js';
 
 async function hashValue(value) {
@@ -152,5 +152,57 @@ describe('authService', () => {
       where: { id: 'rt1' },
       data: { revokedAt: expect.any(Date) }
     }));
+  });
+
+  it('resets password with a valid backup code and invalidates the used code', async () => {
+    const validBackupCode = 'abc123backup';
+    const otherBackupCode = 'unusedbackup';
+    const validBackupCodeHash = await hashValue(validBackupCode);
+    const otherBackupCodeHash = await hashValue(otherBackupCode);
+
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'u6',
+      name: 'Dora',
+      email: 'd@d.com',
+      passwordHash: await hashValue('old_password'),
+      backupCodes: [validBackupCodeHash, otherBackupCodeHash]
+    });
+    prisma.user.update.mockResolvedValue({ id: 'u6' });
+
+    const result = await resetPasswordWithBackupCode('d@d.com', validBackupCode, 'new_password');
+
+    expect(result).toEqual({ success: true });
+    expect(prisma.user.update).toHaveBeenLastCalledWith({
+      where: { email: 'd@d.com' },
+      data: {
+        backupCodes: [otherBackupCodeHash],
+        passwordHash: expect.any(String)
+      }
+    });
+    await expect(bcrypt.compare('new_password', prisma.user.update.mock.calls.at(-1)[0].data.passwordHash)).resolves.toBe(true);
+  });
+
+  it('rejects password reset with an invalid backup code', async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'u7',
+      email: 'e@e.com',
+      passwordHash: await hashValue('old_password'),
+      backupCodes: [await hashValue('different_code')]
+    });
+
+    await expect(resetPasswordWithBackupCode('e@e.com', 'wrong_code', 'new_password')).rejects.toBeInstanceOf(AuthenticationError);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects password reset with an already used backup code', async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'u8',
+      email: 'f@f.com',
+      passwordHash: await hashValue('old_password'),
+      backupCodes: []
+    });
+
+    await expect(resetPasswordWithBackupCode('f@f.com', 'used_code', 'new_password')).rejects.toBeInstanceOf(AuthenticationError);
+    expect(prisma.user.update).not.toHaveBeenCalled();
   });
 });

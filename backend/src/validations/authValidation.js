@@ -30,17 +30,14 @@ export const backupLoginSchema = z.object({
   backupCode: z.string().min(6)
 });
 
+export const resetPasswordWithBackupCodeSchema = z.object({
+  email: z.string().email('E-mail inválido.'),
+  backupCode: z.string().min(6),
+  newPassword: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres.')
+});
+
 export const totpResetSchema = z.object({
   action: z.enum(['generate_backup', 'reset_totp']).optional(),
   email: z.string().email('E-mail inválido.').optional(),
   backupCode: z.string().optional()
-});
-
-export const forgotPasswordSchema = z.object({
-  email: z.string().email('E-mail inválido.')
-});
-
-export const resetPasswordSchema = z.object({
-  email: z.string().email('E-mail inválido.'),
-  newPassword: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres.')
 });

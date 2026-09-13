@@ -182,6 +182,36 @@ async function findValidRefreshTokenRecord(rawRefreshToken) {
   return null;
 }
 
+async function consumeBackupCode(email, backupCode, { persist = true } = {}) {
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) {
+    logger.warn('Backup code attempt with non-existent email', { email });
+    throw new AuthenticationError('Credenciais inválidas.');
+  }
+
+  const stored = user.backupCodes || [];
+  let matchedIndex = -1;
+  for (let i = 0; i < stored.length; i++) {
+    const ok = await bcryptLib.compare(backupCode, stored[i]);
+    if (ok) {
+      matchedIndex = i;
+      break;
+    }
+  }
+
+  if (matchedIndex === -1) {
+    logger.warn('Invalid backup code attempt', { userId: user.id, result: 'failure' });
+    throw new AuthenticationError('Código de backup inválido.');
+  }
+
+  const newCodes = stored.filter((_, idx) => idx !== matchedIndex);
+  if (persist) {
+    await prisma.user.update({ where: { email }, data: { backupCodes: newCodes } });
+  }
+
+  return { user, remainingBackupCodes: newCodes };
+}
+
 export async function registerUser(data) {
   const existing = await prisma.user.findUnique({ where: { email: data.email } });
   if (existing) {
@@ -274,35 +304,28 @@ export async function loginUser(data) {
 }
 
 export async function backupLogin(email, backupCode) {
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) {
-    logger.warn('Backup login attempt with non-existent email', { email });
-    throw new AuthenticationError('Credenciais inválidas.');
-  }
-
-  const stored = user.backupCodes || [];
-  // stored is expected to be array of hashed codes
-  let matchedIndex = -1;
-  for (let i = 0; i < stored.length; i++) {
-    const ok = await bcryptLib.compare(backupCode, stored[i]);
-    if (ok) {
-      matchedIndex = i;
-      break;
-    }
-  }
-
-  if (matchedIndex === -1) {
-    logger.warn('Invalid backup code attempt', { userId: user.id, result: 'failure' });
-    throw new AuthenticationError('Código de backup inválido.');
-  }
-
-  // remove used code
-  const newCodes = stored.filter((_, idx) => idx !== matchedIndex);
-  await prisma.user.update({ where: { email }, data: { backupCodes: newCodes } });
+  const { user } = await consumeBackupCode(email, backupCode);
 
   logger.info('User logged in with backup code', { userId: user.id, result: 'success' });
   const tokens = await issueUserTokens(user.id);
   return { user: publicUser(user), accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
+}
+
+export async function resetPasswordWithBackupCode(email, backupCode, newPassword) {
+  const { user, remainingBackupCodes } = await consumeBackupCode(email, backupCode, { persist: false });
+  const passwordHash = await bcryptLib.hash(newPassword, 10);
+
+  await prisma.user.update({
+    where: { email },
+    data: {
+      backupCodes: remainingBackupCodes,
+      passwordHash
+    }
+  });
+
+  logger.info('Password reset with backup code successfully', { userId: user.id, result: 'success' });
+
+  return { success: true };
 }
 
 export async function refreshUserSession(refreshToken) {
@@ -381,28 +404,4 @@ export async function resetTotpForUser(userId) {
 
   logger.info('Reset TOTP for user', { userId });
   return { totpUri, backupCodes: plainBackupCodes };
-}
-
-export async function forgotPassword(email) {
-  const user = await prisma.user.findUnique({ where: { email } });
-  logger.info('Password reset requested', { email, found: !!user });
-  return {
-    found: !!user,
-    note: 'Implementação simplificada. Em produção, gere token seguro e envie por e-mail.'
-  };
-}
-
-export async function resetPassword(email, newPassword) {
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) throw new NotFoundError('Usuário não encontrado.');
-
-  const passwordHash = await bcryptLib.hash(newPassword, 10);
-  await prisma.user.update({
-    where: { email },
-    data: { passwordHash }
-  });
-
-  logger.info('Password reset successfully', { userId: user.id, email });
-
-  return { success: true };
 }
