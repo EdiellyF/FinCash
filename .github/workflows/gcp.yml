@@ -45,9 +45,9 @@ jobs:
         run: |
           ./cloud_sql_proxy -instances=$DB_INSTANCE=tcp:5432 &
           sleep 3
-          npm cache clean --force
           cd backend
-          npm install
+          npm cache clean --force
+          npm ci
           npx prisma migrate deploy
 
       - name: Build Docker image
