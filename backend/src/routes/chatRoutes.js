@@ -2,6 +2,8 @@ import express from 'express';
 import { sendMessage, getHistory, getLimits, exportToPdf, comparePeriods, sendMessageStream } from '../controllers/chatController.js';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
 import { rateLimiter } from '../middlewares/rateLimiter.js';
+import { validate } from '../middlewares/validateMiddleware.js';
+import { sendMessageSchema, comparePeriodsSchema } from '../validations/chatValidation.js';
 
 const router = express.Router();
 
@@ -57,7 +59,7 @@ const router = express.Router();
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/message', authMiddleware, rateLimiter(5, 60000), sendMessage);
+router.post('/message', authMiddleware, rateLimiter(5, 60000), validate(sendMessageSchema), sendMessage);
 
 /**
  * @swagger
@@ -99,7 +101,7 @@ router.post('/message', authMiddleware, rateLimiter(5, 60000), sendMessage);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/message-stream', authMiddleware, rateLimiter(5, 60000), sendMessageStream);
+router.post('/message-stream', authMiddleware, rateLimiter(5, 60000), validate(sendMessageSchema), sendMessageStream);
 
 /**
  * @swagger
@@ -259,6 +261,6 @@ router.get('/export-pdf', authMiddleware, rateLimiter(3, 60000), exportToPdf);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/compare', authMiddleware, rateLimiter(5, 60000), comparePeriods);
+router.post('/compare', authMiddleware, rateLimiter(5, 60000), validate(comparePeriodsSchema), comparePeriods);
 
 export default router;

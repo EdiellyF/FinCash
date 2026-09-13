@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
+import { validate } from '../middlewares/validateMiddleware.js';
 import {
   extractTransactions,
   extractTransactionsPDF,
@@ -8,6 +9,11 @@ import {
   saveTransactions
 } from '../controllers/transactionExtractionController.js';
 import { prisma } from '../config/db.js';
+import {
+  extractTransactionsSchema,
+  extractAndSaveTransactionsSchema,
+  saveTransactionsSchema
+} from '../validations/transactionExtractionValidation.js';
 
 const router = Router();
 const upload = multer({
@@ -116,9 +122,9 @@ router.get('/extraction-limits', async (req, res) => {
  *                     confidence:
  *                       type: number
  */
-router.post('/extract', extractTransactions);
+router.post('/extract', validate(extractTransactionsSchema), extractTransactions);
 router.post('/extract-pdf', upload.single('file'), extractTransactionsPDF);
-router.post('/extract-save', saveTransactions);
+router.post('/extract-save', validate(saveTransactionsSchema), saveTransactions);
 
 /**
  * @swagger
@@ -162,6 +168,6 @@ router.post('/extract-save', saveTransactions);
  *                     save:
  *                       type: object
  */
-router.post('/extract-and-save', extractAndSaveTransactions);
+router.post('/extract-and-save', validate(extractAndSaveTransactionsSchema), extractAndSaveTransactions);
 
 export default router;

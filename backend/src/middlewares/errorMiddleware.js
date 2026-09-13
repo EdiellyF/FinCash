@@ -7,6 +7,17 @@ import {
   NotFoundError
 } from '../utils/errors.js';
 
+const isProduction = () => env.nodeEnv === 'production';
+
+const productionErrorMessageMap = {
+  VALIDATION_ERROR: 'Invalid request.',
+  AUTHENTICATION_ERROR: 'Authentication failed.',
+  AUTHORIZATION_ERROR: 'Access denied.',
+  NOT_FOUND: 'Resource not found.',
+  CONFLICT_ERROR: 'Request conflict.',
+  RATE_LIMIT_EXCEEDED: 'Too many requests.'
+};
+
 /**
  * Enhanced error middleware with detailed error responses
  */
@@ -26,9 +37,11 @@ export function errorMiddleware(err, req, res, next) {
   if (err instanceof AppError) {
     return res.status(err.statusCode).json({
       success: false,
-      message: err.message,
+      message: isProduction()
+        ? productionErrorMessageMap[err.code] || 'Request failed.'
+        : err.message,
       code: err.code,
-      ...(err.details && { details: err.details }),
+      ...(!isProduction() && err.details && { details: err.details }),
       ...(env.nodeEnv === 'development' && { stack: err.stack })
     });
   }
@@ -36,7 +49,7 @@ export function errorMiddleware(err, req, res, next) {
   if (err.code === 'INVALID_PDF' || err.statusCode === 400) {
     return res.status(400).json({
       success: false,
-      message: err.message || 'Arquivo inválido.',
+      message: isProduction() ? 'Invalid request.' : err.message || 'Arquivo inválido.',
       code: 'VALIDATION_ERROR',
       ...(env.nodeEnv === 'development' && { stack: err.stack })
     });
@@ -163,7 +176,7 @@ export function notFoundHandler(req, res) {
   
   return res.status(404).json({
     success: false,
-    message: `Route ${req.method} ${req.path} not found`,
+    message: isProduction() ? 'Resource not found.' : `Route ${req.method} ${req.path} not found`,
     code: 'ROUTE_NOT_FOUND'
   });
 }

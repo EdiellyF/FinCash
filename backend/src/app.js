@@ -2,6 +2,7 @@ import 'dotenv/config';
 import 'express-async-errors';
 import cors from 'cors';
 import express from 'express';
+import helmet from 'helmet';
 import { env } from './config/env.js';
 import { logger } from './config/logger.js';
 import authRoutes from './routes/authRoutes.js';
@@ -24,16 +25,9 @@ import { swaggerSpec } from './config/swaggerConfig.js';
 
 const app = express();
 
+app.use(helmet());
 app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || env.frontendOrigins.includes(origin)) {
-      callback(null, true);
-      return;
-    }
-
-    callback(new Error('Not allowed by CORS'));
-  },
-  credentials: true,
+  origin: env.frontendUrl,
 }));
 app.use(express.json());
 

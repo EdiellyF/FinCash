@@ -1,13 +1,22 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
-import { 
-  categorySummary, 
-  exportCsv, 
-  exportPdf, 
+import { validate } from '../middlewares/validateMiddleware.js';
+import {
+  categorySummary,
+  exportCsv,
+  exportPdf,
   monthly,
   exportGoalsCsv,
   exportBudgetsCsv
 } from '../controllers/reportController.js';
+import {
+  monthlyReportSchema,
+  categorySummarySchema,
+  exportCsvSchema,
+  exportPdfSchema,
+  exportGoalsCsvSchema,
+  exportBudgetsCsvSchema
+} from '../validations/reportValidation.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -56,7 +65,7 @@ router.use(authMiddleware);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/monthly', monthly);
+router.get('/monthly', validate(monthlyReportSchema), monthly);
 
 /**
  * @swagger
@@ -108,7 +117,7 @@ router.get('/monthly', monthly);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/category', categorySummary);
+router.get('/category', validate(categorySummarySchema), categorySummary);
 
 /**
  * @swagger
@@ -160,7 +169,7 @@ router.get('/category', categorySummary);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/export/csv', exportCsv);
+router.get('/export/csv', validate(exportCsvSchema), exportCsv);
 
 /**
  * @swagger
@@ -207,7 +216,7 @@ router.get('/export/csv', exportCsv);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/export/pdf', exportPdf);
+router.get('/export/pdf', validate(exportPdfSchema), exportPdf);
 
 /**
  * @swagger
@@ -242,7 +251,7 @@ router.get('/export/pdf', exportPdf);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/export/goals-csv', exportGoalsCsv);
+router.get('/export/goals-csv', validate(exportGoalsCsvSchema), exportGoalsCsv);
 
 /**
  * @swagger
@@ -289,6 +298,6 @@ router.get('/export/goals-csv', exportGoalsCsv);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/export/budgets-csv', exportBudgetsCsv);
+router.get('/export/budgets-csv', validate(exportBudgetsCsvSchema), exportBudgetsCsv);
 
 export default router;

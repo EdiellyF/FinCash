@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
 import { validate } from '../middlewares/validateMiddleware.js';
 import { transactionSchema } from '../validations/transactionValidation.js';
+import { listTransactionsSchema } from '../validations/listValidation.js';
 import { create, list, remove, update } from '../controllers/transactionController.js';
 
 const router = Router();
@@ -60,7 +61,7 @@ router.use(authMiddleware);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/', list);
+router.get('/', validate(listTransactionsSchema), list);
 
 /**
  * @swagger

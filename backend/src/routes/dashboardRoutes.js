@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
+import { validate } from '../middlewares/validateMiddleware.js';
 import { getDashboard } from '../controllers/dashboardController.js';
+import { getDashboardSchema } from '../validations/dashboardValidation.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -46,6 +48,6 @@ router.use(authMiddleware);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/', getDashboard);
+router.get('/', validate(getDashboardSchema), getDashboard);
 
 export default router;
