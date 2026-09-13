@@ -1,13 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Check, FileText, Sparkles, Upload, Wand2, X, Edit2, Save, Trash2, AlertCircle } from 'lucide-react';
+import { Check, Sparkles, Upload, Wand2, X, Edit2, Save, Trash2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../services/api';
 import { currency, dateBR } from '../../utils/format';
 
 export default function TransactionExtraction({ onTransactionsSaved }) {
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState('text');
-  const [text, setText] = useState('');
   const [pdfFile, setPdfFile] = useState(null);
   const [extractedTransactions, setExtractedTransactions] = useState([]);
   
@@ -53,10 +51,8 @@ export default function TransactionExtraction({ onTransactionsSaved }) {
 
   function resetModal() {
     setOpen(false);
-    setText('');
     setPdfFile(null);
     setExtractedTransactions([]);
-    setMode('text');
     setEditingIndex(null);
     setEditingTransaction(null);
   }
@@ -108,33 +104,6 @@ export default function TransactionExtraction({ onTransactionsSaved }) {
     });
   }
 
-  async function handleExtractText() {
-    if (!text || text.trim().length === 0) {
-      toast.error('Digite um texto para extrair transações.');
-      return;
-    }
-
-    if (extractionLimits.remaining <= 0) {
-      toast.error(`Você atingiu o limite diário de ${extractionLimits.limit} extrações.`);
-      return;
-    }
-
-    try {
-      const { data } = await api.post('/transactions/extract', { text });
-      
-      const enrichedTransactions = enrichExtractedData(data.data.transactions);
-      setExtractedTransactions(enrichedTransactions);
-
-      if (data.data.remainingExtractions !== undefined) {
-        setExtractionLimits(prev => ({ ...prev, used: prev.used + 1, remaining: data.data.remainingExtractions }));
-      }
-
-      toast.success(`${enrichedTransactions.length} transações extraídas com sucesso!`);
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Erro ao extrair transações.');
-    }
-  }
-
   async function handleExtractPdf() {
     if (!pdfFile) {
       toast.error('Selecione um extrato ou fatura em PDF.');
@@ -147,6 +116,7 @@ export default function TransactionExtraction({ onTransactionsSaved }) {
     }
 
     try {
+      setIsExtracting(true);
       const formData = new FormData();
       formData.append('file', pdfFile);
 
@@ -164,19 +134,6 @@ export default function TransactionExtraction({ onTransactionsSaved }) {
       toast.success(`${enrichedTransactions.length} transações extraídas do PDF!`);
     } catch (error) {
       toast.error(error.response?.data?.message || 'Erro ao extrair transações do PDF.');
-    }
-  }
-
-  async function handleExtract() {
-    try {
-      setIsExtracting(true);
-      if (mode === 'pdf') {
-        await handleExtractPdf();
-      } else {
-        await handleExtractText();
-      }
-    } catch (error) {
-      // Erros tratados nas funções específicas
     } finally {
       setIsExtracting(false);
     }
@@ -273,58 +230,22 @@ export default function TransactionExtraction({ onTransactionsSaved }) {
 
         {extractedTransactions.length === 0 ? (
           <div className="space-y-6">
-            <div className="grid grid-cols-2 rounded-lg border border-fincash-ink/10 p-1 bg-white">
-              <button
-                type="button"
-                onClick={() => setMode('text')}
-                className={`flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition ${
-                  mode === 'text' ? 'bg-fincash-forest text-fincash-cream' : 'text-fincash-ink/60 hover:bg-fincash-ink/5 hover:text-fincash-ink'
-                }`}
-              >
-                <FileText size={16} />
-                <span>Texto livre</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode('pdf')}
-                className={`flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition ${
-                  mode === 'pdf' ? 'bg-fincash-forest text-fincash-cream' : 'text-fincash-ink/60 hover:bg-fincash-ink/5 hover:text-fincash-ink'
-                }`}
-              >
-                <Upload size={16} />
-                <span>Arquivo PDF</span>
-              </button>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-fincash-ink">Fatura do cartão ou extrato bancário</label>
+              <label className="flex min-h-[160px] cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-fincash-ink/20 bg-white p-6 text-center transition hover:border-fincash-forest hover:bg-fincash-ink/5">
+                <Upload className="mb-3 text-fincash-forest/80" size={28} />
+                <span className="font-medium text-fincash-ink">{pdfFile ? pdfFile.name : 'Selecionar arquivo PDF'}</span>
+                <span className="mt-1 text-sm text-fincash-ink/50">Tamanho máximo <span className="font-money">20 MB</span></span>
+                <input type="file" accept="application/pdf" className="hidden" onChange={(e) => setPdfFile(e.target.files?.[0] || null)} />
+              </label>
             </div>
-
-            {mode === 'text' ? (
-              <div>
-                <label className="mb-2 block text-sm font-medium text-fincash-ink">Descreva suas transações</label>
-                <textarea
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  placeholder="Ex: salário 1800, mercado 300, transporte 150..."
-                  className="w-full resize-none rounded-lg border border-fincash-ink/20 bg-white p-4 text-fincash-ink outline-none transition focus:border-fincash-forest focus:ring-1 focus:ring-fincash-forest placeholder:text-fincash-ink/40"
-                  rows={6}
-                />
-              </div>
-            ) : (
-              <div>
-                <label className="mb-2 block text-sm font-medium text-fincash-ink">Fatura do cartão ou extrato</label>
-                <label className="flex min-h-[160px] cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-fincash-ink/20 bg-white p-6 text-center transition hover:border-fincash-forest hover:bg-fincash-ink/5">
-                  <Upload className="mb-3 text-fincash-forest/80" size={28} />
-                  <span className="font-medium text-fincash-ink">{pdfFile ? pdfFile.name : 'Selecionar PDF'}</span>
-                  <span className="mt-1 text-sm text-fincash-ink/50">Tamanho máximo <span className="font-money">10 MB</span></span>
-                  <input type="file" accept="application/pdf" className="hidden" onChange={(e) => setPdfFile(e.target.files?.[0] || null)} />
-                </label>
-              </div>
-            )}
 
             <div className="flex justify-end gap-3 pt-2">
               <button onClick={resetModal} className="rounded-lg border border-fincash-ink/20 px-5 py-2.5 text-sm font-medium text-fincash-ink transition hover:bg-fincash-ink/5">
                 Cancelar
               </button>
               <button
-                onClick={handleExtract}
+                onClick={handleExtractPdf}
                 disabled={isExtracting || extractionLimits.remaining <= 0}
                 className="flex items-center gap-2 rounded-lg bg-fincash-forest px-5 py-2.5 text-sm font-medium text-fincash-cream transition hover:bg-fincash-forest/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
