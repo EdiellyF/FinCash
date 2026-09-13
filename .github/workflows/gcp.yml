@@ -46,8 +46,7 @@ jobs:
           ./cloud_sql_proxy -instances=$DB_INSTANCE=tcp:5432 &
           sleep 3
           cd backend
-          rm -rf node_modules package-lock.json
-          npm install
+          yarn install
           npx prisma migrate deploy
           
       - name: Build Docker image
