@@ -8,8 +8,6 @@ export const monthlyReportSchema = z.object({
 export const categorySummarySchema = z.object({
   startDate: z.string().optional(),
   endDate: z.string().optional()
-}).refine(data => data.startDate || data.endDate, {
-  message: 'Pelo menos uma data deve ser fornecida.'
 });
 
 export const exportCsvSchema = z.object({

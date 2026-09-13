@@ -6,6 +6,7 @@ import FormModal from '../components/ui/FormModal';
 import BasicTable from '../components/tables/BasicTable';
 import api from '../services/api';
 import { toast } from 'sonner';
+import { Plus } from 'lucide-react';
 
 const initial = { name: '', type: 'expense', color: '#2563eb', icon: 'tag' };
 
@@ -65,7 +66,9 @@ export default function Categories() {
     <AppShell>
       <PageCard
         title="Categorias"
-        actions={<button onClick={handleNew} className="rounded-2xl bg-blue-600 px-4 py-3 font-semibold text-white">Nova categoria</button>}
+        actions={<button onClick={handleNew} className="flex items-center gap-2 rounded-sm bg-fincash-forest px-4 py-3 font-semibold text-fincash-cream">
+          <Plus size={16} /> Nova categoria
+        </button>}
       >
         <BasicTable
           columns={[
@@ -75,10 +78,10 @@ export default function Categories() {
             { key: 'isDefault', label: 'Origem', render: (row) => row.isDefault ? 'Padrão' : 'Personalizada' }
           ]}
           rows={rows}
-          renderActions={(row) => row.isDefault ? <span className="text-slate-400">Bloqueada</span> : (
+          renderActions={(row) => row.isDefault ? <span className="text-fincash-ink/60">Bloqueada</span> : (
             <div className="flex gap-2">
-              <button onClick={() => handleEdit(row)} className="rounded-xl bg-amber-500 px-3 py-2 text-white">Editar</button>
-              <button onClick={() => remove(row.id)} className="rounded-xl bg-red-600 px-3 py-2 text-white">Excluir</button>
+              <button onClick={() => handleEdit(row)} className="rounded-sm bg-fincash-gold px-3 py-2 text-fincash-ink">Editar</button>
+              <button onClick={() => remove(row.id)} className="rounded-sm bg-fincash-terracotta px-3 py-2 text-fincash-cream">Excluir</button>
             </div>
           )}
         />
@@ -93,7 +96,7 @@ export default function Categories() {
           </select>
           <input {...register('color')} type="color" />
           <input {...register('icon')} placeholder="Ícone" />
-          <button className="rounded-2xl bg-blue-600 px-4 py-3 font-semibold text-white md:col-span-2">Salvar categoria</button>
+          <button className="rounded-sm bg-fincash-forest px-4 py-3 font-semibold text-fincash-cream md:col-span-2">Salvar categoria</button>
         </form>
       </FormModal>
     </AppShell>
