@@ -46,7 +46,7 @@ jobs:
           ./cloud_sql_proxy -instances=$DB_INSTANCE=tcp:5432 &
           sleep 3
           cd backend
-          npm cache clean --force
+          rm -rf node_modules package-lock.json
           npm install
           npx prisma migrate deploy
           
